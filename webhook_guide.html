@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Webhook Setup — {{ school_name }}</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  :root{--bg:#f5f6fa;--card:#fff;--border:#e0e4ef;--green:#00b87a;--blue:#2563eb;--amber:#d97706;--text:#1a1d2e;--muted:#6b7280;--shadow:0 2px 12px rgba(0,0,0,0.07)}
+  body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;min-height:100vh}
+  .topbar{background:var(--card);border-bottom:2px solid var(--border);padding:12px 24px;display:flex;align-items:center;justify-content:space-between;box-shadow:var(--shadow)}
+  .page-title{font-size:16px;font-weight:700}
+  .nav-links{display:flex;gap:6px}
+  .nav-link{padding:6px 12px;border-radius:6px;font-size:12px;font-weight:500;color:var(--muted);text-decoration:none;border:1px solid transparent;transition:all .15s}
+  .nav-link:hover{color:var(--text);background:var(--bg);border-color:var(--border)}
+  .content{padding:24px;max-width:720px}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:24px;box-shadow:var(--shadow);margin-bottom:20px}
+  .step-num{width:32px;height:32px;border-radius:50%;background:var(--blue);color:#fff;font-weight:700;font-size:14px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
+  .step-row{display:flex;gap:14px;align-items:flex-start;margin-bottom:20px}
+  .step-content{flex:1}
+  .step-title{font-size:14px;font-weight:700;margin-bottom:6px}
+  .step-desc{font-size:13px;color:var(--muted);line-height:1.7}
+  .code-box{background:#f0f5ff;border:1px solid #bfdbfe;border-radius:8px;padding:12px 16px;font-family:monospace;font-size:13px;color:var(--blue);margin:8px 0;word-break:break-all}
+  .tip{background:#ecfdf5;border:1px solid #6ee7b7;border-radius:8px;padding:12px 14px;font-size:12px;color:var(--green);margin-top:8px}
+  .warn{background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:12px 14px;font-size:12px;color:var(--amber);margin-top:8px}
+  .btn{display:inline-block;padding:9px 18px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:none;font-family:'Inter',sans-serif;text-decoration:none;transition:all .15s}
+  .btn-blue{background:var(--blue);color:#fff}
+  h2{font-size:18px;font-weight:800;margin-bottom:6px}
+  .subtitle{font-size:13px;color:var(--muted);margin-bottom:24px;line-height:1.6}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div class="page-title">🔗 Webhook Setup Guide</div>
+  <div class="nav-links">
+    <a href="/"         class="nav-link">📡 Scanner</a>
+    <a href="/settings" class="nav-link">⚙️ Settings</a>
+  </div>
+</div>
+<div class="content">
+  <div class="card">
+    <h2>Setting up the Messenger Webhook</h2>
+    <p class="subtitle">
+      This allows parents to message your Facebook Page with their child's RFID code
+      and get automatically linked to receive notifications. Follow these steps once.
+    </p>
+
+    <div class="step-row">
+      <div class="step-num">1</div>
+      <div class="step-content">
+        <div class="step-title">Download and install ngrok</div>
+        <div class="step-desc">
+          ngrok creates a temporary public URL for your local server so Facebook can reach it.
+          <br/><br/>
+          Go to <strong>ngrok.com</strong>, sign up for free, download the Windows version,
+          and extract it to your Desktop.
+        </div>
+        <div class="tip">✅ ngrok is free and safe — it's used by millions of developers worldwide.</div>
+      </div>
+    </div>
+
+    <div class="step-row">
+      <div class="step-num">2</div>
+      <div class="step-content">
+        <div class="step-title">Start ngrok</div>
+        <div class="step-desc">
+          Open Command Prompt and type:
+        </div>
+        <div class="code-box">cd %USERPROFILE%\Desktop<br/>ngrok http 5000</div>
+        <div class="step-desc">
+          You will see a screen with a URL like:
+        </div>
+        <div class="code-box">Forwarding: https://abc123.ngrok.io → http://localhost:5000</div>
+        <div class="step-desc">Copy that <strong>https://abc123.ngrok.io</strong> URL — you need it next.</div>
+        <div class="warn">⚠️ Keep this ngrok window open. The URL changes every time you restart ngrok.</div>
+      </div>
+    </div>
+
+    <div class="step-row">
+      <div class="step-num">3</div>
+      <div class="step-content">
+        <div class="step-title">Enter the webhook URL in Facebook</div>
+        <div class="step-desc">
+          Go back to <strong>developers.facebook.com</strong> → Your App →
+          Use Cases → Messenger API Settings → Configure Webhooks.<br/><br/>
+          Fill in:
+        </div>
+        <div class="code-box">Callback URL: https://abc123.ngrok.io/webhook<br/>Verify token: {{ verify_token }}</div>
+        <div class="step-desc" style="margin-top:8px">
+          Click <strong>Verify and Save</strong>.
+        </div>
+        <div class="tip">✅ If verification succeeds, Facebook will show a green checkmark.</div>
+      </div>
+    </div>
+
+    <div class="step-row">
+      <div class="step-num">4</div>
+      <div class="step-content">
+        <div class="step-title">Subscribe to messages</div>
+        <div class="step-desc">
+          Still on the Messenger API Settings page, find your page
+          <strong>CES Attendance</strong> and click <strong>Add Subscriptions</strong>.
+          <br/><br/>
+          Check the box for <strong>messages</strong> and click Save.
+        </div>
+      </div>
+    </div>
+
+    <div class="step-row">
+      <div class="step-num">5</div>
+      <div class="step-content">
+        <div class="step-title">Test it!</div>
+        <div class="step-desc">
+          On your phone, open Facebook Messenger and search for your page
+          <strong>CES Attendance</strong>. Send a message with a student's
+          RFID code, for example:
+        </div>
+        <div class="code-box">0004A3F1</div>
+        <div class="step-desc">
+          You should receive an automatic reply linking you to that student. 🎉
+        </div>
+        <div class="tip">✅ Once linked, that parent will automatically receive notifications every time their child scans.</div>
+      </div>
+    </div>
+
+    <div class="step-row">
+      <div class="step-num">6</div>
+      <div class="step-content">
+        <div class="step-title">For permanent setup (optional)</div>
+        <div class="step-desc">
+          ngrok URLs change every time you restart. For a permanent setup,
+          either use ngrok's paid plan (fixed URL) or ask your school's
+          IT administrator to set up port forwarding on the school router.
+          <br/><br/>
+          For now, ngrok free is fine for testing and enrollment day setup.
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <a href="/settings" class="btn btn-blue">← Back to Settings</a>
+</div>
+</body>
+</html>

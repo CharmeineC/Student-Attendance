@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Bulk Photo Import — {{ school_name }}</title>
+<style>
+  :root{--bg:#0a0c10;--surface:#12151c;--card:#1a1e28;--border:#252a38;--green:#00e5a0;--blue:#4d7cff;--amber:#ffb020;--red:#ff4d6a;--text:#e8eaf2;--muted:#6b7080;}
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;min-height:100vh;}
+  .topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:12px 24px;display:flex;align-items:center;justify-content:space-between;}
+  .page-title{font-size:16px;font-weight:700;}
+  a.back-link{color:var(--muted);text-decoration:none;font-size:13px;}
+  a.back-link:hover{color:var(--text);}
+  .wrap{max-width:1000px;margin:0 auto;padding:24px;}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:20px;}
+  .card-title{font-size:15px;font-weight:700;margin-bottom:8px;}
+  .card-desc{font-size:13px;color:var(--muted);margin-bottom:16px;line-height:1.6;}
+  .drop-zone{border:2px dashed var(--border);border-radius:12px;padding:40px;text-align:center;cursor:pointer;transition:all .15s;}
+  .drop-zone:hover, .drop-zone.dragover{border-color:var(--green);background:rgba(0,229,160,.05);}
+  .drop-zone-icon{font-size:36px;margin-bottom:10px;}
+  .drop-zone-text{color:var(--muted);font-size:13px;}
+  #file-input{display:none;}
+  .btn{padding:10px 20px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:none;font-family:'Inter',sans-serif;display:inline-flex;align-items:center;gap:6px;transition:all .15s;}
+  .btn-green{background:var(--green);color:#04140f;}
+  .btn-green:hover{opacity:.9;}
+  .btn-outline{background:var(--card);color:var(--text);border:1px solid var(--border);}
+  .btn-outline:hover{border-color:var(--muted);}
+  .btn:disabled{opacity:.4;cursor:not-allowed;}
+  table{width:100%;border-collapse:collapse;margin-top:16px;}
+  thead th{padding:10px 12px;font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);text-align:left;background:var(--surface);border-bottom:1px solid var(--border);}
+  tbody td{padding:10px 12px;font-size:13px;border-bottom:1px solid var(--border);vertical-align:middle;}
+  .thumb{width:44px;height:44px;object-fit:cover;border-radius:6px;border:1px solid var(--border);}
+  .lrn-input{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-size:13px;width:130px;font-family:monospace;}
+  .lrn-input.matched{border-color:var(--green);}
+  .lrn-input.unmatched{border-color:var(--red);}
+  .match-name{font-size:12px;font-weight:600;}
+  .match-name.found{color:var(--green);}
+  .match-name.notfound{color:var(--red);}
+  .row-skip{opacity:.35;}
+  .skip-toggle{font-size:11px;color:var(--muted);cursor:pointer;text-decoration:underline;background:none;border:none;}
+  .summary-bar{display:flex;gap:20px;margin-bottom:16px;font-size:13px;}
+  .summary-item{color:var(--muted);}
+  .summary-item b{color:var(--text);}
+  .result-msg{margin-top:14px;font-size:13px;padding:10px 14px;border-radius:8px;}
+  .result-ok{background:rgba(0,229,160,.1);color:var(--green);}
+  .result-err{background:rgba(255,77,106,.1);color:var(--red);}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div class="page-title">📸 Bulk Photo Import</div>
+  <a href="/students" class="back-link">← Back to Students</a>
+</div>
+
+<div class="wrap">
+
+  <div class="card">
+    <div class="card-title">1. Upload photos</div>
+    <div class="card-desc">
+      Two ways to match photos to students — use whichever's easier:
+      <b>rename each file to include the student's 12-digit LRN</b> (e.g. "129509250161.jpg" — fastest, no extra software needed),
+      <b>or</b> leave filenames as-is if the LRN is visibly printed/typed somewhere in the photo itself
+      (e.g. on an ID card) — the system will try to read it automatically, but this requires OCR software installed on the host.
+      Filenames are checked first; OCR is only used as a fallback for files without an LRN in the name.
+    </div>
+    <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
+      <div class="drop-zone-icon">📁</div>
+      <div class="drop-zone-text">Click to select photos, or drag and drop them here</div>
+      <input type="file" id="file-input" accept="image/*" multiple onchange="handleFiles(this.files)"/>
+    </div>
+    <div id="selected-count" style="margin-top:10px;font-size:13px;color:var(--muted)"></div>
+    <div style="margin-top:16px">
+      <button class="btn btn-green" id="scan-btn" onclick="scanPhotos()" disabled>🔍 Scan photos</button>
+    </div>
+  </div>
+
+  <div class="card" id="review-card" style="display:none">
+    <div class="card-title">2. Review matches</div>
+    <div class="card-desc">
+      Check each detected LRN before saving. A wrong or missing LRN can be corrected directly —
+      the matched student name updates live. Rows with no match won't be saved unless you fix the LRN.
+    </div>
+    <div class="summary-bar">
+      <div class="summary-item">Matched: <b id="count-matched">0</b></div>
+      <div class="summary-item">Unmatched: <b id="count-unmatched">0</b></div>
+    </div>
+    <table>
+      <thead><tr><th>Photo</th><th>File</th><th>Detected LRN</th><th>Source</th><th>Matched Student</th><th></th></tr></thead>
+      <tbody id="review-tbody"></tbody>
+    </table>
+    <div style="margin-top:18px">
+      <button class="btn btn-green" id="confirm-btn" onclick="confirmImport()">✅ Save all matched photos</button>
+      <button class="btn btn-outline" onclick="location.reload()">Cancel</button>
+    </div>
+    <div id="result-msg"></div>
+  </div>
+
+</div>
+
+<script>
+let selectedFiles = [];
+let scanResults = [];
+
+const dropZone = document.getElementById('drop-zone');
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('dragover');
+  handleFiles(e.dataTransfer.files);
+});
+
+function handleFiles(files) {
+  selectedFiles = Array.from(files);
+  document.getElementById('selected-count').textContent =
+    selectedFiles.length + ' photo(s) selected';
+  document.getElementById('scan-btn').disabled = selectedFiles.length === 0;
+}
+
+function scanPhotos() {
+  const btn = document.getElementById('scan-btn');
+  btn.disabled = true;
+  btn.textContent = '🔍 Scanning... (this can take a moment for many photos)';
+
+  const formData = new FormData();
+  selectedFiles.forEach(f => formData.append('photos', f));
+
+  fetch('/api/bulk_photo/scan', { method: 'POST', body: formData })
+    .then(r => r.json())
+    .then(data => {
+      btn.textContent = '🔍 Scan photos';
+      if (!data.success) {
+        alert(data.message || 'Scan failed.');
+        btn.disabled = false;
+        return;
+      }
+      scanResults = data.results;
+      renderReview();
+    })
+    .catch(() => {
+      alert('Error scanning photos. Is the server running?');
+      btn.textContent = '🔍 Scan photos';
+      btn.disabled = false;
+    });
+}
+
+function renderReview() {
+  document.getElementById('review-card').style.display = 'block';
+  const tbody = document.getElementById('review-tbody');
+  tbody.innerHTML = '';
+
+  const sourceLabel = { filename: '📄 Filename', ocr: '🔍 OCR' };
+
+  scanResults.forEach((r, i) => {
+    const tr = document.createElement('tr');
+    tr.id = `row-${i}`;
+    const hasMatch = !!r.matched_student_id;
+    const srcLabel = sourceLabel[r.source] || '';
+    tr.innerHTML = `
+      <td><img class="thumb" src="${URL.createObjectURL(selectedFiles[i])}"/></td>
+      <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted);font-size:11px">${r.original_filename}</td>
+      <td><input class="lrn-input ${hasMatch ? 'matched' : (r.detected_lrn ? 'unmatched' : '')}"
+             id="lrn-${i}" value="${r.detected_lrn || ''}" maxlength="12"
+             oninput="onLrnEdit(${i})" placeholder="12-digit LRN"/></td>
+      <td style="font-size:11px;color:var(--muted)">${srcLabel}</td>
+      <td><span class="match-name ${hasMatch ? 'found' : 'notfound'}" id="match-${i}">
+             ${hasMatch ? '✓ ' + r.matched_name : (r.detected_lrn ? '✗ No student found' : (r.error || '— No LRN detected'))}
+          </span></td>
+      <td><button class="skip-toggle" onclick="toggleSkip(${i})" id="skip-${i}">Skip</button></td>
+    `;
+    tbody.appendChild(tr);
+  });
+  updateSummary();
+}
+
+function onLrnEdit(i) {
+  // Re-check match against the loaded student list isn't available client-side,
+  // so re-validate against the server on confirm. For live feedback here, just
+  // mark as "pending re-check" until confirm — keeps this simple and reliable.
+  const input = document.getElementById(`lrn-${i}`);
+  const val = input.value.trim();
+  scanResults[i].detected_lrn = val;
+  scanResults[i].matched_student_id = null; // will be re-resolved server-side on confirm
+  const label = document.getElementById(`match-${i}`);
+  label.className = 'match-name';
+  label.textContent = val.length === 12 ? '(will re-check on save)' : '— Enter 12-digit LRN';
+  input.className = 'lrn-input';
+  updateSummary();
+}
+
+function toggleSkip(i) {
+  const row = document.getElementById(`row-${i}`);
+  const btn = document.getElementById(`skip-${i}`);
+  row.classList.toggle('row-skip');
+  scanResults[i]._skip = row.classList.contains('row-skip');
+  btn.textContent = scanResults[i]._skip ? 'Unskip' : 'Skip';
+  updateSummary();
+}
+
+function updateSummary() {
+  const active = scanResults.filter(r => !r._skip);
+  const matched = active.filter(r => r.detected_lrn && r.detected_lrn.length === 12).length;
+  document.getElementById('count-matched').textContent = matched;
+  document.getElementById('count-unmatched').textContent = active.length - matched;
+}
+
+function confirmImport() {
+  const confirmed = scanResults
+    .filter(r => !r._skip && r.detected_lrn && r.detected_lrn.length === 12)
+    .map(r => ({ tmp_file: r.tmp_file, lrn: r.detected_lrn }));
+
+  if (confirmed.length === 0) {
+    alert('No rows with a valid 12-digit LRN to save.');
+    return;
+  }
+  if (!confirm(`Save ${confirmed.length} photo(s) to matching students?`)) return;
+
+  const btn = document.getElementById('confirm-btn');
+  btn.disabled = true;
+  btn.textContent = 'Saving...';
+
+  fetch('/api/bulk_photo/confirm', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ confirmed })
+  }).then(r => r.json())
+    .then(data => {
+      const msgDiv = document.getElementById('result-msg');
+      msgDiv.className = 'result-msg ' + (data.saved > 0 ? 'result-ok' : 'result-err');
+      msgDiv.textContent = `✅ Saved ${data.saved} photo(s).` + (data.failed ? ` ${data.failed} skipped (no match or error).` : '');
+      btn.textContent = '✅ Save all matched photos';
+      btn.disabled = false;
+    })
+    .catch(() => {
+      alert('Error saving. Is the server running?');
+      btn.disabled = false;
+      btn.textContent = '✅ Save all matched photos';
+    });
+}
+</script>
+</body>
+</html>

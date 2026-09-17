@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Sending Blast — {{ school_name }}</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet"/>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  :root{--bg:#f5f6fa;--card:#fff;--border:#e0e4ef;--green:#00b87a;--blue:#2563eb;--amber:#d97706;--text:#1a1d2e;--muted:#6b7280;--shadow:0 2px 12px rgba(0,0,0,0.07)}
+  body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:40px;max-width:520px;width:100%;box-shadow:var(--shadow);text-align:center}
+  .icon{font-size:48px;margin-bottom:20px}
+  h1{font-size:22px;font-weight:800;margin-bottom:8px}
+  .subtitle{font-size:13px;color:var(--muted);margin-bottom:32px;line-height:1.6}
+  .progress-track{background:#f3f4f6;border-radius:99px;height:14px;overflow:hidden;margin-bottom:12px}
+  .progress-bar{height:100%;background:linear-gradient(90deg,var(--blue),var(--green));border-radius:99px;transition:width .5s ease;width:0%}
+  .progress-label{font-size:13px;color:var(--muted);margin-bottom:24px}
+  .stats-row{display:flex;justify-content:center;gap:32px;margin-bottom:28px}
+  .stat-item .val{font-size:28px;font-weight:900}
+  .stat-item .lbl{font-size:11px;color:var(--muted);margin-top:2px}
+  .val-sent{color:var(--green)}
+  .val-failed{color:var(--amber)}
+  .val-total{color:var(--blue)}
+  .message-preview{background:#f0f5ff;border:1px solid #bfdbfe;border-radius:8px;padding:14px;font-size:13px;color:var(--text);line-height:1.7;text-align:left;margin-bottom:20px;white-space:pre-wrap}
+  .btn{display:inline-block;padding:10px 24px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;border:none;font-family:'Inter',sans-serif;text-decoration:none;transition:all .15s}
+  .btn-blue{background:var(--blue);color:#fff}
+  .btn-outline{background:transparent;color:var(--text);border:1px solid var(--border)}
+  .done-msg{display:none;color:var(--green);font-weight:700;font-size:15px;margin-bottom:16px}
+  .done-msg.show{display:block}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="icon" id="status-icon">📤</div>
+  <h1 id="status-title">Sending blast message...</h1>
+  <div class="subtitle">
+    Section: <strong>{{ blast.section or 'All students' }}</strong><br/>
+    Channels: <strong>{{ blast.channels }}</strong>
+  </div>
+
+  <div class="message-preview">{{ blast.message }}<br/>— {{ school_name }}</div>
+
+  <div class="progress-track">
+    <div class="progress-bar" id="progress-bar"></div>
+  </div>
+  <div class="progress-label" id="progress-label">Starting...</div>
+
+  <div class="stats-row">
+    <div class="stat-item"><div class="val val-sent"  id="val-sent">0</div><div class="lbl">Sent</div></div>
+    <div class="stat-item"><div class="val val-failed" id="val-failed">0</div><div class="lbl">Failed</div></div>
+    <div class="stat-item"><div class="val val-total"  id="val-total">{{ blast.total }}</div><div class="lbl">Total</div></div>
+  </div>
+
+  <div class="done-msg" id="done-msg">✅ Blast completed!</div>
+
+  <div style="display:flex;gap:12px;justify-content:center">
+    <a href="/blast" class="btn btn-outline">← Back to Blast</a>
+    <a href="/"      class="btn btn-blue">📡 Go to Scanner</a>
+  </div>
+</div>
+
+<script>
+const blastId = {{ blast.id }};
+let pollTimer;
+
+function poll() {
+  fetch(`/api/blast_progress/${blastId}`)
+    .then(r => r.json())
+    .then(data => {
+      const pct = data.total > 0 ? Math.round((data.sent + data.failed) / data.total * 100) : 0;
+      document.getElementById('progress-bar').style.width   = pct + '%';
+      document.getElementById('progress-label').textContent  = `${data.sent + data.failed} of ${data.total} processed (${pct}%)`;
+      document.getElementById('val-sent').textContent   = data.sent;
+      document.getElementById('val-failed').textContent = data.failed;
+      document.getElementById('val-total').textContent  = data.total;
+
+      if (data.status === 'done') {
+        clearInterval(pollTimer);
+        document.getElementById('status-icon').textContent  = '✅';
+        document.getElementById('status-title').textContent = 'Blast complete!';
+        document.getElementById('progress-bar').style.width = '100%';
+        document.getElementById('progress-label').textContent = `All ${data.total} parents processed.`;
+        document.getElementById('done-msg').classList.add('show');
+      }
+    });
+}
+
+pollTimer = setInterval(poll, 2000);
+poll();
+</script>
+</body>
+</html>

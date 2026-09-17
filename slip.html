@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<title>Slip — {{ student.full_name }}</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#f0f0f0;font-family:'Arial',sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px;flex-direction:column;gap:16px;}
+  .slip{background:white;width:420px;padding:22px;border:2px solid #1a3c5e;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.15);}
+  .slip-header{text-align:center;border-bottom:2px solid #1a3c5e;padding-bottom:12px;margin-bottom:14px;}
+  .school-name{font-size:14px;font-weight:700;color:#1a3c5e;text-transform:uppercase;letter-spacing:1px;}
+  .slip-subtitle{font-size:11px;color:#6b7280;margin-top:3px;}
+  .info-table{width:100%;border-collapse:collapse;margin-bottom:14px;}
+  .info-table td{padding:5px 6px;font-size:12px;border-bottom:1px solid #f3f4f6;}
+  .info-table .lbl{color:#6b7280;font-weight:700;width:40%;}
+  .info-table .val{color:#1a1d2e;font-weight:700;}
+  .code-box{background:#eff6ff;border:2px solid #bfdbfe;border-radius:8px;padding:12px;text-align:center;margin-bottom:14px;}
+  .code-label{font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;}
+  .code-value{font-size:24px;font-weight:900;color:#1d4ed8;font-family:'Courier New',monospace;letter-spacing:4px;}
+  .code-hint{font-size:10px;color:#6b7280;margin-top:4px;font-style:italic;}
+  .instructions{border-top:2px solid #1a3c5e;padding-top:12px;}
+  .inst-title{font-size:11px;font-weight:700;color:#1a3c5e;text-align:center;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;}
+  .inst-block{margin-bottom:10px;padding:8px;background:#f9fafb;border-radius:6px;border-left:3px solid #1a3c5e;}
+  .inst-channel{font-size:11px;font-weight:700;color:#1a1d2e;margin-bottom:4px;}
+  .inst-en{font-size:10px;color:#374151;line-height:1.7;}
+  .inst-fil{font-size:10px;color:#6b7280;font-style:italic;line-height:1.7;margin-top:3px;}
+  .step-code{background:#dbeafe;padding:1px 6px;border-radius:3px;font-family:'Courier New',monospace;font-weight:700;color:#1d4ed8;}
+  .actions{display:flex;gap:10px;justify-content:center;}
+  .btn{padding:10px 20px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;border:none;text-decoration:none;display:inline-block;}
+  .btn-blue{background:#1a3c5e;color:white;}
+  .btn-outline{background:white;color:#1a3c5e;border:2px solid #1a3c5e;}
+  @media print{body{background:white;padding:0;}
+    .slip{box-shadow:none;margin:0 auto;}
+    .actions{display:none;}}
+</style>
+</head>
+<body>
+
+<div class="slip" id="slip">
+  <!-- Header -->
+  <div class="slip-header">
+    <div class="school-name">{{ school_name }}</div>
+    <div class="slip-subtitle">Parent Notification Setup Slip — Abiso para sa Magulang</div>
+  </div>
+
+  <!-- Student info -->
+  <table class="info-table">
+    <tr><td class="lbl">Student / Estudyante</td><td class="val">{{ student.full_name }}</td></tr>
+    {% if student.lrn %}<tr><td class="lbl">LRN</td><td class="val">{{ student.lrn }}</td></tr>{% endif %}
+    <tr><td class="lbl">Section / Seksiyon</td><td class="val">{{ student.section or '—' }}</td></tr>
+  </table>
+
+  <!-- RFID Code box -->
+  {% if student.rfid_code %}
+  <div class="code-box">
+    <div class="code-label">Your child's RFID Code — Ang RFID Code ng inyong anak</div>
+    <div class="code-value">{{ student.rfid_code }}</div>
+    <div class="code-hint">Send / Ipadala ang code na ito sa Messenger</div>
+  </div>
+  {% endif %}
+
+  <!-- Instructions -->
+  <div class="instructions">
+    <div class="inst-title">📲 How to receive attendance notifications<br/>Paano makatanggap ng abiso sa pagdalo</div>
+
+    <!-- Messenger -->
+    <div class="inst-block">
+      <div class="inst-channel">💬 Facebook Messenger</div>
+      <div class="inst-en">
+        1. Open Facebook Messenger on your phone.<br/>
+        2. Search for <strong>{{ school_name }}</strong> and open the page.<br/>
+        3. Tap <strong>Message</strong>, then send: <span class="step-code">{{ student.rfid_code or 'YOUR RFID CODE' }}</span><br/>
+        4. You will receive a confirmation. ✅
+      </div>
+      <div class="inst-fil">
+        1. Buksan ang Facebook Messenger sa inyong telepono.<br/>
+        2. Hanapin ang <strong>{{ school_name }}</strong> at buksan ang page.<br/>
+        3. Pindutin ang <strong>Message</strong>, tapos ipadala: <span class="step-code">{{ student.rfid_code or 'RFID CODE' }}</span><br/>
+        4. Makakatanggap kayo ng confirmation. ✅
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Action buttons (hidden on print) -->
+<div class="actions">
+  <button class="btn btn-blue" onclick="window.print()">🖨️ Print / Save</button>
+  <a href="/students" class="btn btn-outline">← Back</a>
+</div>
+
+</body>
+</html>

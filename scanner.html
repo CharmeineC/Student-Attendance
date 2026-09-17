@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>{{ school_name }} — Scanner</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap" rel="stylesheet"/>
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --bg:#f5f6fa;--surface:#ffffff;--card:#ffffff;--border:#e0e4ef;
+    --green:#00b87a;--blue:#2563eb;--amber:#d97706;--red:#dc2626;
+    --text:#1a1d2e;--muted:#6b7280;--shadow:0 2px 12px rgba(0,0,0,0.08);
+  }
+  body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;height:100vh;max-height:100vh;overflow:hidden;display:flex;flex-direction:column;}
+
+  /* ── Top bar ── */
+  .topbar{background:var(--surface);border-bottom:2px solid var(--border);padding:14px 24px;display:flex;align-items:center;justify-content:space-between;box-shadow:var(--shadow);flex-shrink:0;}
+  .topbar-left{display:flex;align-items:center;gap:16px;}
+  .school-logo{height:64px;width:64px;border-radius:10px;object-fit:cover;border:2px solid var(--border);}
+  .logo-placeholder{height:64px;width:64px;border-radius:10px;background:var(--blue);display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:900;color:white;flex-shrink:0;}
+  .school-info{}
+  .school-name{font-size:22px;font-weight:900;color:var(--text);line-height:1.2;}
+  .school-tagline{font-size:12px;color:var(--muted);margin-top:3px;}
+  .topbar-right{display:flex;align-items:center;gap:16px;}
+  .clock{font-size:22px;font-weight:900;color:var(--blue);font-variant-numeric:tabular-nums;}
+  .date{font-size:11px;color:var(--muted);text-align:right;}
+  .status-pill{display:flex;align-items:center;gap:6px;padding:5px 12px;background:#ecfdf5;border:1px solid #6ee7b7;border-radius:20px;font-size:11px;font-weight:600;color:var(--green);}
+  .status-dot{width:7px;height:7px;border-radius:50%;background:var(--green);animation:pulse 2s ease-in-out infinite;}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+  .nav-links{display:flex;gap:6px;}
+  .nav-link{padding:6px 12px;border-radius:6px;font-size:12px;font-weight:500;color:var(--muted);text-decoration:none;transition:all .15s;border:1px solid transparent;}
+  .nav-link:hover{color:var(--text);background:var(--bg);border-color:var(--border);}
+
+  /* ── Stats ── */
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;padding:16px 24px;flex-shrink:0;}
+  .stat-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px 20px;box-shadow:var(--shadow);position:relative;overflow:hidden;}
+  .stat-card::after{content:'';position:absolute;bottom:0;left:0;right:0;height:4px;border-radius:0 0 12px 12px;}
+  .stat-card.s-total::after{background:var(--blue);}
+  .stat-card.s-in::after{background:var(--green);}
+  .stat-card.s-out::after{background:var(--amber);}
+  .stat-card.s-absent::after{background:var(--red);}
+  .stat-val{font-size:32px;font-weight:900;font-variant-numeric:tabular-nums;}
+  .stat-label{font-size:11px;color:var(--muted);margin-top:3px;font-weight:500;}
+  .s-total .stat-val{color:var(--blue);}
+  .s-in .stat-val{color:var(--green);}
+  .s-out .stat-val{color:var(--amber);}
+  .s-absent .stat-val{color:var(--red);}
+
+  /* ── Main layout ── */
+  .main{flex:1;display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:0 24px 16px;min-height:0;overflow:hidden;}
+
+  /* ── Scan zone ── */
+  .left-panel{display:flex;flex-direction:column;gap:14px;min-height:0;}
+  .scan-card{background:var(--card);border:2px solid var(--border);border-radius:16px;padding:28px;text-align:center;box-shadow:var(--shadow);transition:border-color .3s,box-shadow .3s;}
+  .scan-card.flash-green{border-color:var(--green);box-shadow:0 0 30px rgba(0,184,122,.15);}
+  .scan-card.flash-red{border-color:var(--red);box-shadow:0 0 30px rgba(220,38,38,.15);}
+  .scan-icon{font-size:44px;margin-bottom:10px;}
+  .scan-hint{font-size:13px;color:var(--muted);margin-bottom:18px;}
+  #rfid-input{width:100%;background:var(--bg);border:2px solid var(--border);border-radius:10px;padding:14px 20px;color:var(--blue);font-size:18px;font-weight:700;text-align:center;outline:none;font-family:'Courier New',monospace;letter-spacing:4px;transition:border-color .2s;}
+  #rfid-input:focus{border-color:var(--blue);}
+  #rfid-input::placeholder{color:#cbd5e1;letter-spacing:1px;font-size:13px;font-family:'Inter',sans-serif;}
+
+  /* ── Confirmation card ── */
+  .right-panel{display:flex;flex-direction:column;min-height:0;}
+  .confirm-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:clamp(20px,2.5vw,36px);display:flex;flex-direction:row;align-items:center;justify-content:center;gap:clamp(24px,3vw,44px);box-shadow:var(--shadow);flex:1;overflow:hidden;min-height:0;}
+  .confirm-card.flash-green{border-color:var(--green);box-shadow:0 0 30px rgba(0,184,122,.15);}
+  .confirm-card.flash-red{border-color:var(--red);box-shadow:0 0 30px rgba(220,38,38,.15);}
+  @keyframes slideIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+  .confirm-placeholder{display:flex;flex-direction:column;align-items:center;gap:12px;color:var(--muted);}
+  .confirm-placeholder-icon{font-size:64px;opacity:.3;}
+  .confirm-placeholder-text{font-size:13px;opacity:.5;}
+  .confirm-photo-col{flex-shrink:0;height:100%;display:flex;align-items:center;justify-content:center;}
+  .confirm-details-col{flex:1;min-width:0;text-align:left;display:flex;flex-direction:column;align-items:flex-start;}
+  .confirm-photo{height:100%;max-height:70vh;width:auto;aspect-ratio:1992/3162;border-radius:12px;object-fit:cover;display:block;border:5px solid var(--green);box-shadow:0 0 0 5px #ecfdf5;animation:slideIn .3s ease;}
+  .confirm-avatar{height:100%;max-height:70vh;width:auto;aspect-ratio:1992/3162;border-radius:12px;background:#eff6ff;display:flex;align-items:center;justify-content:center;font-size:clamp(40px,4.5vw,72px);font-weight:900;color:var(--blue);border:5px solid var(--blue);box-shadow:0 0 0 5px #eff6ff;animation:slideIn .3s ease;}
+  .confirm-name{font-size:clamp(20px,2.6vw,36px);font-weight:800;text-align:left;color:var(--text);line-height:1.2;}
+  .confirm-section{font-size:clamp(13px,1.4vw,19px);color:var(--muted);text-align:left;margin-top:6px;}
+  .confirm-badge{padding:clamp(7px,.8vw,10px) clamp(18px,2vw,28px);border-radius:8px;font-size:clamp(12px,1.3vw,17px);font-weight:700;letter-spacing:1px;margin:clamp(14px,1.6vw,22px) 0;display:inline-block;width:fit-content;}
+  .badge-in{background:#ecfdf5;color:var(--green);border:1px solid #6ee7b7;}
+  .badge-out{background:#fffbeb;color:var(--amber);border:1px solid #fcd34d;}
+  .badge-err{background:#fef2f2;color:var(--red);border:1px solid #fca5a5;}
+  .confirm-time{font-size:clamp(28px,3.6vw,52px);font-weight:900;text-align:left;color:var(--text);margin-top:2px;}
+  .confirm-date{font-size:clamp(12px,1.3vw,17px);color:var(--muted);text-align:left;margin-top:6px;}
+
+  /* ── Log feed ── */
+  .log-panel{background:var(--card);border:1px solid var(--border);border-radius:12px;display:flex;flex-direction:column;overflow:hidden;box-shadow:var(--shadow);flex:1;min-height:0;}
+  .log-header{padding:14px 16px;border-bottom:1px solid var(--border);font-size:12px;font-weight:700;color:var(--text);display:flex;justify-content:space-between;align-items:center;}
+  .log-count{font-size:11px;color:var(--muted);font-weight:400;}
+  .log-body{flex:1;overflow-y:auto;min-height:0;max-height:100%;}
+  .log-entry{display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid #f3f4f6;transition:background .1s;}
+  .log-entry:hover{background:#f9fafb;}
+  .log-entry:last-child{border-bottom:none;}
+  .log-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+  .log-dot.IN{background:var(--green);}
+  .log-dot.OUT{background:var(--amber);}
+  .log-info{flex:1;min-width:0;}
+  .log-name{font-size:12px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .log-sec{font-size:10px;color:var(--muted);}
+  .log-time{font-size:11px;color:var(--muted);font-family:monospace;flex-shrink:0;}
+
+  /* ── Announcement ticker ── */
+  .ticker-bar{background:#059669;color:white;padding:14px 0;display:flex;align-items:center;overflow:hidden;flex-shrink:0;}
+  .ticker-label{background:#047857;padding:0 20px;font-size:16px;font-weight:800;letter-spacing:1px;text-transform:uppercase;white-space:nowrap;height:100%;display:flex;align-items:center;border-right:2px solid rgba(255,255,255,.25);flex-shrink:0;}
+  .ticker-track{flex:1;overflow:hidden;position:relative;}
+  .ticker-content{display:inline-block;white-space:nowrap;font-size:20px;font-weight:600;padding-left:100%;animation:ticker 45s linear infinite;}
+  .ticker-content:empty::before{content:"No announcements at this time.";opacity:.7;}
+  @keyframes ticker{0%{transform:translateX(0)}100%{transform:translateX(-100%)}}
+</style>
+</head>
+<body>
+
+<!-- Top bar -->
+<div class="topbar">
+  <div class="topbar-left">
+    {% if school_logo %}
+      <img src="/static/uploads/{{ school_logo }}" class="school-logo" alt="Logo"/>
+    {% else %}
+      <div class="logo-placeholder">{{ school_name[0] }}</div>
+    {% endif %}
+    <div class="school-info">
+      <div class="school-name">{{ school_name }}</div>
+      <div class="school-tagline">Attendance Monitoring System</div>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <div class="nav-links">
+      <a href="/admin"       class="nav-link">📊 Admin</a>
+      <a href="/students"    class="nav-link">👥 Students</a>
+      <a href="/reports"     class="nav-link">📋 Reports</a>
+      <a href="/blast"       class="nav-link">📣 Blast</a>
+      
+      <a href="/settings"    class="nav-link">⚙️ Settings</a>
+    </div>
+    <div class="status-pill"><div class="status-dot"></div> Active</div>
+    <div>
+      <div class="clock" id="clock">00:00:00</div>
+      <div class="date"  id="date"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Stats -->
+<div class="stats">
+  <div class="stat-card s-total"><div class="stat-val" id="s-total">0</div><div class="stat-label">Students scanned today</div></div>
+  <div class="stat-card s-in">   <div class="stat-val" id="s-in">0</div>   <div class="stat-label">Currently inside</div></div>
+  <div class="stat-card s-out">  <div class="stat-val" id="s-out">0</div>  <div class="stat-label">Logged out</div></div>
+  <div class="stat-card s-absent"><div class="stat-val" id="s-absent">0</div><div class="stat-label">Not yet scanned</div></div>
+</div>
+
+<!-- Main -->
+<div class="main">
+  <!-- LEFT: Scan input + logs -->
+  <div class="left-panel">
+    <div class="scan-card" id="scan-card">
+      <div class="scan-icon">📶</div>
+      <div class="scan-hint">Click here then ask the student to tap their RFID card</div>
+      <input type="text" id="rfid-input" placeholder="Waiting for card scan..." autocomplete="off" spellcheck="false"/>
+    </div>
+    <div class="log-panel">
+      <div class="log-header">Today's log<span class="log-count" id="log-count">0 entries</span></div>
+      <div class="log-body" id="log-body"></div>
+    </div>
+  </div>
+  <!-- RIGHT: Student photo + details -->
+  <div class="right-panel">
+    <div class="confirm-card" id="confirm-card">
+      <div class="confirm-photo-col" id="confirm-photo-wrap">
+        <div class="confirm-placeholder">
+          <div class="confirm-placeholder-icon">🪪</div>
+          <div class="confirm-placeholder-text">Waiting for card scan...</div>
+        </div>
+      </div>
+      <div class="confirm-details-col">
+        <div class="confirm-name"    id="confirm-name"></div>
+        <div class="confirm-section" id="confirm-section"></div>
+        <div class="confirm-badge"   id="confirm-badge"></div>
+        <div class="confirm-time"    id="confirm-time"></div>
+        <div class="confirm-date"    id="confirm-date"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Announcement ticker -->
+<div class="ticker-bar">
+  <div class="ticker-label">📢 Announcements</div>
+  <div class="ticker-track">
+    <span class="ticker-content" id="ticker-text">{{ announcement }}</span>
+  </div>
+</div>
+
+<script>
+function updateClock(){
+  const now=new Date();
+  const days=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const mons=['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const h=String(now.getHours()).padStart(2,'0'),m=String(now.getMinutes()).padStart(2,'0'),s=String(now.getSeconds()).padStart(2,'0');
+  document.getElementById('clock').textContent=`${h}:${m}:${s}`;
+  document.getElementById('date').textContent=`${days[now.getDay()]}, ${mons[now.getMonth()]} ${now.getDate()}, ${now.getFullYear()}`;
+}
+setInterval(updateClock,1000);updateClock();
+
+const input=document.getElementById('rfid-input');
+input.focus();
+document.body.addEventListener('click',e=>{if(!e.target.closest('a'))input.focus();});
+
+input.addEventListener('keydown',function(e){
+  if(e.key!=='Enter')return;
+  const code=this.value.trim();this.value='';
+  if(!code)return;
+  fetch('/api/scan',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({rfid_code:code})})
+    .then(r=>r.json())
+    .then(data=>{
+      if(data.success){showConfirmation(data);flashCard('green');refreshStats();}
+      else{showError(data.error||'Unknown card',code);flashCard('red');}
+    }).catch(()=>showError('Server error',code));
+});
+
+function flashCard(color){
+  const card=document.getElementById('scan-card');
+  card.classList.remove('flash-green','flash-red');
+  void card.offsetWidth;
+  card.classList.add(color==='green'?'flash-green':'flash-red');
+  setTimeout(()=>card.classList.remove('flash-green','flash-red'),1500);
+}
+
+let confirmTimer=null;
+function showConfirmation(data){
+  const wrap=document.getElementById('confirm-photo-wrap');
+  if(data.photo_url){wrap.innerHTML=`<img src="${data.photo_url}" class="confirm-photo" alt="${data.name}"/>`;}
+  else{const initials=data.name.split(' ').map(w=>w[0]).slice(0,2).join('');wrap.innerHTML=`<div class="confirm-avatar">${initials}</div>`;}
+  document.getElementById('confirm-name').textContent=data.name;
+  document.getElementById('confirm-section').textContent=data.section;
+  document.getElementById('confirm-time').textContent=data.scan_time;
+  document.getElementById('confirm-date').textContent=data.scan_date;
+  const badge=document.getElementById('confirm-badge');
+  if(data.scan_type==='IN'){badge.textContent='▶  TIME IN';badge.className='confirm-badge badge-in';document.getElementById('confirm-time').style.color='var(--green)';}
+  else{badge.textContent='◀  TIME OUT';badge.className='confirm-badge badge-out';document.getElementById('confirm-time').style.color='var(--amber)';}
+  document.getElementById('confirm-card').classList.add('show');
+  clearTimeout(confirmTimer);
+  confirmTimer=setTimeout(()=>document.getElementById('confirm-card').classList.remove('show'),8000);
+  addToLog(data.name,data.section,data.scan_type,data.scan_time);
+}
+
+function showError(message,code){
+  document.getElementById('confirm-photo-wrap').innerHTML=`<div class="confirm-avatar" style="border-color:var(--red);color:var(--red);background:#fef2f2">?</div>`;
+  document.getElementById('confirm-name').textContent='Unknown Card';
+  document.getElementById('confirm-section').textContent=`Card ID: ${code}`;
+  document.getElementById('confirm-badge').textContent='✗  NOT REGISTERED';
+  document.getElementById('confirm-badge').className='confirm-badge badge-err';
+  document.getElementById('confirm-time').textContent='';
+  document.getElementById('confirm-date').textContent=message;
+  document.getElementById('confirm-card').classList.add('show');
+  clearTimeout(confirmTimer);
+  confirmTimer=setTimeout(()=>document.getElementById('confirm-card').classList.remove('show'),5000);
+}
+
+function addToLog(name,section,type,time){
+  const body=document.getElementById('log-body');
+  const entry=document.createElement('div');
+  entry.className='log-entry';
+  entry.innerHTML=`<div class="log-dot ${type}"></div><div class="log-info"><div class="log-name">${name}</div><div class="log-sec">${section}</div></div><div class="log-time">${time}</div>`;
+  body.insertBefore(entry,body.firstChild);
+  document.getElementById('log-count').textContent=`${body.querySelectorAll('.log-entry').length} entries`;
+}
+
+function refreshStats(){
+  fetch('/api/today_stats').then(r=>r.json()).then(data=>{
+    document.getElementById('s-total').textContent=data.stats.total;
+    document.getElementById('s-in').textContent=data.stats.in;
+    document.getElementById('s-out').textContent=data.stats.out;
+    document.getElementById('s-absent').textContent=data.stats.not_yet;
+  });
+}
+refreshStats();
+setInterval(refreshStats,10000);
+
+fetch('/api/today_stats').then(r=>r.json()).then(data=>{
+  data.recent.forEach(e=>addToLog(e.name,e.section,e.scan_type,e.scan_time));
+});
+
+function refreshAnnouncement(){
+  fetch('/api/announcement').then(r=>r.json()).then(data=>{
+    document.getElementById('ticker-text').textContent=data.text||'';
+  });
+}
+setInterval(refreshAnnouncement,60000);
+</script>
+</body>
+</html>
