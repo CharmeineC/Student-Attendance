@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Students — {{ school_name }}</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap" rel="stylesheet"/>
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{--bg:#0a0c10;--surface:#12151c;--card:#1a1e28;--border:#252a38;--green:#00e5a0;--blue:#4d7cff;--amber:#ffb020;--red:#ff4d6a;--text:#e8eaf2;--muted:#6b7080;}
+  body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;min-height:100vh;}
+  .topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:12px 24px;display:flex;align-items:center;justify-content:space-between;}
+  .page-title{font-size:16px;font-weight:700;}
+  .nav-links{display:flex;gap:6px;flex-wrap:wrap;}
+  .nav-link{padding:6px 12px;border-radius:6px;font-size:12px;font-weight:500;color:var(--muted);text-decoration:none;border:1px solid transparent;transition:all .15s;}
+  .nav-link:hover,.nav-link.active{color:var(--text);background:var(--card);border-color:var(--border);}
+  .content{padding:24px;}
+  .toolbar{display:flex;gap:10px;align-items:center;margin-bottom:16px;flex-wrap:wrap;}
+  .search-input{flex:1;min-width:200px;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:9px 14px;color:var(--text);font-size:13px;outline:none;}
+  .search-input:focus{border-color:var(--blue);}
+  .btn{padding:8px 16px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;border:none;font-family:'Inter',sans-serif;text-decoration:none;display:inline-flex;align-items:center;gap:6px;transition:all .15s;}
+  .btn-green{background:var(--green);color:#0a0c10;}
+  .btn-green:hover{background:#00c48a;}
+  .btn-outline{background:var(--card);color:var(--text);border:1px solid var(--border);}
+  .btn-outline:hover{border-color:var(--muted);}
+  .btn-red{background:rgba(255,77,106,.15);color:var(--red);border:1px solid rgba(255,77,106,.3);}
+  .btn-amber{background:rgba(255,176,32,.15);color:var(--amber);border:1px solid rgba(255,176,32,.3);}
+  .btn-sm{padding:4px 10px;font-size:11px;}
+  .form-select-sm{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:8px 12px;color:var(--text);font-size:13px;outline:none;font-family:'Inter',sans-serif;}
+  .form-select-sm:focus{border-color:var(--blue);}
+  .banner{padding:10px 14px;border-radius:8px;margin-bottom:14px;font-size:13px;display:flex;align-items:center;gap:10px;}
+  .banner-success{background:rgba(0,229,160,.1);border:1px solid rgba(0,229,160,.3);color:var(--green);}
+  .banner-error{background:rgba(255,77,106,.1);border:1px solid rgba(255,77,106,.3);color:var(--red);}
+  .table-wrap{background:var(--card);border:1px solid var(--border);border-radius:12px;overflow-y:auto;overflow-x:auto;max-height:70vh;}
+  table{width:100%;border-collapse:collapse;}
+  thead th{padding:11px 14px;font-size:11px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);text-align:left;background:var(--surface);font-weight:600;border-bottom:1px solid var(--border);position:sticky;top:0;z-index:1;}
+  tbody td{padding:11px 14px;font-size:13px;border-bottom:1px solid rgba(255,255,255,.03);vertical-align:middle;}
+  tbody tr:last-child td{border-bottom:none;}
+  tbody tr:hover{background:rgba(255,255,255,.02);}
+  tbody tr.inactive{opacity:.5;}
+  .student-photo{width:36px;height:36px;border-radius:50%;object-fit:cover;border:2px solid var(--border);}
+  .student-avatar{width:36px;height:36px;border-radius:50%;background:var(--border);display:inline-flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:var(--green);}
+  .rfid-code{font-family:monospace;font-size:12px;color:var(--muted);}
+  .notif-chip{font-size:10px;padding:2px 7px;border-radius:4px;display:inline-block;margin:1px;}
+  .chip-set{background:rgba(0,229,160,.1);color:var(--green);}
+  .chip-not{background:rgba(107,112,128,.1);color:var(--muted);}
+  .status-badge{font-size:10px;padding:3px 8px;border-radius:4px;font-weight:600;}
+  .status-active{background:rgba(0,229,160,.1);color:var(--green);}
+  .status-dropped{background:rgba(255,77,106,.1);color:var(--red);}
+  .status-transferred{background:rgba(255,176,32,.1);color:var(--amber);}
+  .status-other{background:rgba(107,112,128,.1);color:var(--muted);}
+  .actions{display:flex;gap:5px;flex-wrap:wrap;}
+  .filter-tabs{display:flex;gap:6px;margin-bottom:14px;}
+  .filter-tab{padding:5px 12px;border-radius:6px;font-size:12px;font-weight:500;cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--muted);transition:all .15s;}
+  .filter-tab.active,.filter-tab:hover{background:var(--card);color:var(--text);border-color:var(--muted);}
+
+  /* Modals */
+  .modal-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;align-items:center;justify-content:center;}
+  .modal-backdrop.open{display:flex;}
+  .modal{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:26px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto;}
+  .modal-title{font-size:15px;font-weight:700;margin-bottom:18px;}
+  .form-row{margin-bottom:13px;}
+  .form-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;display:block;}
+  .form-input,.form-select,.form-textarea{width:100%;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--text);font-size:13px;outline:none;font-family:'Inter',sans-serif;}
+  .form-input:focus,.form-select:focus,.form-textarea:focus{border-color:var(--blue);}
+  .form-textarea{resize:vertical;min-height:70px;}
+  .photo-upload{border:2px dashed var(--border);border-radius:10px;padding:18px;text-align:center;cursor:pointer;transition:border-color .2s;}
+  .photo-upload:hover{border-color:var(--blue);}
+  .photo-preview{width:72px;height:72px;border-radius:50%;object-fit:cover;margin:0 auto 6px;display:block;}
+  .photo-hint{font-size:12px;color:var(--muted);}
+  .modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:18px;}
+  .btn-cancel{background:transparent;color:var(--muted);border:1px solid var(--border);}
+  .import-note{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:14px;font-size:12px;color:var(--muted);line-height:1.8;margin-bottom:14px;}
+  .import-note strong{color:var(--text);}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div class="page-title">👥 Student Registry</div>
+  <div class="nav-links">
+    <a href="/"            class="nav-link">📡 Scanner</a>
+    <a href="/admin"       class="nav-link">📊 Admin</a>
+    <a href="/students"    class="nav-link active">👥 Students</a>
+    <a href="/reports"     class="nav-link">📋 Reports</a>
+    <a href="/blast"       class="nav-link">📣 Blast</a>
+    
+    <a href="/settings"    class="nav-link">⚙️ Settings</a>
+  </div>
+</div>
+
+<div class="content">
+
+  {% if request.args.get('imported') %}
+  <div class="banner banner-success">✅ Imported {{ request.args.get('imported') }} students!</div>
+  {% endif %}
+  {% if request.args.get('merged') %}
+  <div class="banner banner-success">✅ Merge complete — {{ request.args.get('added') }} added, {{ request.args.get('updated') }} updated. Attendance records untouched.</div>
+  {% endif %}
+  {% if request.args.get('error') %}
+  <div class="banner banner-error">❌ {{ request.args.get('error') }}</div>
+  {% endif %}
+
+  <!-- Filter toolbar -->
+  <div class="toolbar">
+    <input class="search-input" type="text" id="search" placeholder="🔍  Search by name, section, or RFID..." oninput="filterTable()"/>
+    <form method="GET" action="/students" style="display:flex;gap:8px;align-items:center">
+      <select class="form-select-sm" name="section" onchange="this.form.submit()">
+        <option value="">All sections</option>
+        {% for sec in sections %}
+        <option value="{{ sec }}" {% if sec == selected_section %}selected{% endif %}>{{ sec }}</option>
+        {% endfor %}
+      </select>
+    </form>
+    <a href="/students/export_csv{% if selected_section %}?section={{ selected_section }}{% endif %}" class="btn btn-outline">⬇ Export{% if selected_section %} ({{ selected_section }}){% endif %}</a>
+    <button class="btn btn-outline" onclick="openImport()">⬆ Import</button>
+    <a href="/students/bulk_photo" class="btn btn-outline">📸 Bulk photos</a>
+    <button class="btn btn-green"   onclick="openAdd()">+ Add student</button>
+  </div>
+
+  <!-- Status filter tabs -->
+  <div class="filter-tabs">
+    <button class="filter-tab active" onclick="filterStatus('all',this)">All ({{ students|length }})</button>
+    <button class="filter-tab" onclick="filterStatus('active',this)">Active</button>
+    <button class="filter-tab" onclick="filterStatus('dropped',this)">Dropped out</button>
+    <button class="filter-tab" onclick="filterStatus('transferred',this)">Transferred</button>
+    <button class="filter-tab" onclick="filterStatus('other',this)">Other</button>
+  </div>
+
+  <p style="font-size:12px;color:var(--muted);margin-bottom:10px;">
+    Showing <span id="visible-count">{{ students|length }}</span>
+    {% if selected_section %}
+      students in <strong style="color:var(--green)">{{ selected_section }}</strong>
+      <a href="/students" style="color:var(--muted);margin-left:8px;font-size:11px">✕ Clear filter</a>
+    {% else %}
+      of {{ all_count }} students
+    {% endif %}
+  </p>
+
+  <div class="table-wrap">
+    <table id="student-table">
+      <thead>
+        <tr>
+          <th>Photo</th><th>Name</th><th>RFID</th><th>Section</th>
+          <th>Parent / Contact</th><th>Messenger</th>
+          
+          <th>Status</th><th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in students %}
+        <tr data-search="{{ s.full_name|lower }} {{ s.section|lower }} {{ (s.rfid_code or '')|lower }}"
+            data-status="{{ s.status or 'active' }}"
+            class="{{ 'inactive' if (s.status or 'active') != 'active' else '' }}">
+          <td>
+            {% if s.photo %}<img src="/static/uploads/{{ s.photo }}" class="student-photo"/>
+            {% else %}<div class="student-avatar">{{ s.full_name[0] }}</div>{% endif %}
+          </td>
+          <td><strong>{{ s.full_name }}</strong><br/><span style="font-size:10px;color:var(--muted)">{{ s.lrn or '' }}</span></td>
+          <td><span class="rfid-code">{{ s.rfid_code or '—' }}</span></td>
+          <td style="font-size:12px">{{ s.section or '—' }}</td>
+          <td>
+            {% if s.parent_name %}<div style="font-size:12px">{{ s.parent_name }}</div>{% endif %}
+            <div style="color:var(--muted);font-size:11px">{{ s.parent_phone or '—' }}</div>
+          </td>
+          <td>
+            {% if s.messenger_id %}<span class="notif-chip chip-set">✓ linked</span>
+            {% else %}<span class="notif-chip chip-not">not set</span>{% endif %}
+          </td>
+          
+          
+          <td>
+            <span class="status-badge status-{{ s.status or 'active' }}">
+              {{ (s.status or 'active')|title }}
+            </span>
+            {% if s.status_reason %}
+            <div style="font-size:10px;color:var(--muted);margin-top:2px">{{ s.status_reason }}</div>
+            {% endif %}
+          </td>
+          <td>
+            <div class="actions">
+              
+              <button class="btn btn-outline btn-sm"
+                onclick="openEdit({{ s.id }},'{{ s.rfid_code or '' }}','{{ s.full_name }}','{{ s.lrn or '' }}','{{ s.section or '' }}','{{ s.parent_name or '' }}','{{ s.parent_phone or '' }}','{{ s.photo or '' }}')">
+                ✏️
+              </button>
+              <button class="btn btn-amber btn-sm"
+                onclick="openStatus({{ s.id }},'{{ s.full_name }}','{{ s.status or 'active' }}','{{ s.status_reason or '' }}')">
+                📋
+              </button>
+              <form method="POST" action="/students/delete/{{ s.id }}" style="display:inline"
+                    onsubmit="return confirm('Delete {{ s.full_name }}?')">
+                <input type="hidden" name="section_filter" value="{{ selected_section or '' }}"/>
+                <button type="submit" class="btn btn-red btn-sm">🗑</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ADD MODAL -->
+<div class="modal-backdrop" id="add-modal">
+  <div class="modal">
+    <div class="modal-title">+ Add new student</div>
+    <form method="POST" action="/students/add" enctype="multipart/form-data">
+      <input type="hidden" name="section_filter" value="{{ selected_section or '' }}"/>
+      <div class="form-row">
+        <label class="form-label">Photo (optional)</label>
+        <div class="photo-upload" onclick="document.getElementById('add-photo').click()">
+          <div id="add-photo-icon" style="font-size:28px;margin-bottom:6px">📷</div>
+          <div class="photo-hint">Click to upload (JPG/PNG, max 5MB)</div>
+          <img id="add-photo-preview" class="photo-preview" style="display:none"/>
+        </div>
+        <input type="file" id="add-photo" name="photo" accept="image/*" style="display:none" onchange="previewPhoto(this,'add-photo-preview','add-photo-icon')"/>
+      </div>
+      <div class="form-row"><label class="form-label">Full name *</label><input class="form-input" name="full_name" required placeholder="e.g. Juan dela Cruz"/></div>
+      <div class="form-row"><label class="form-label">LRN (Learner Reference Number)</label><input class="form-input" name="lrn" placeholder="12-digit LRN"/></div>
+      <div class="form-row"><label class="form-label">RFID code</label><input class="form-input" name="rfid_code" id="add-rfid" placeholder="Scan card or type manually"/></div>
+      <div class="form-row"><label class="form-label">Section</label><input class="form-input" name="section" placeholder="e.g. Grade 1 - Sampaguita"/></div>
+      <div class="form-row"><label class="form-label">Parent name</label><input class="form-input" name="parent_name"/></div>
+      <div class="form-row"><label class="form-label">Parent phone</label><input class="form-input" name="parent_phone" placeholder="09XXXXXXXXX"/></div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-cancel" onclick="closeModal('add-modal')">Cancel</button>
+        <button type="submit" class="btn btn-green">Save student</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- EDIT MODAL -->
+<div class="modal-backdrop" id="edit-modal">
+  <div class="modal">
+    <div class="modal-title">✏️ Edit student</div>
+    <form method="POST" id="edit-form" enctype="multipart/form-data">
+      <input type="hidden" name="section_filter" value="{{ selected_section or '' }}"/>
+      <div class="form-row">
+        <label class="form-label">Photo</label>
+        <div class="photo-upload" onclick="document.getElementById('edit-photo').click()">
+          <img id="edit-photo-preview" class="photo-preview" style="display:none"/>
+          <div id="edit-photo-icon" style="font-size:28px;margin-bottom:6px">📷</div>
+          <div class="photo-hint">Click to upload new photo (leave blank to keep existing)</div>
+        </div>
+        <input type="file" id="edit-photo" name="photo" accept="image/*" style="display:none" onchange="previewPhoto(this,'edit-photo-preview','edit-photo-icon')"/>
+      </div>
+      <div class="form-row"><label class="form-label">Full name *</label><input class="form-input" name="full_name" id="edit-name" required/></div>
+      <div class="form-row"><label class="form-label">LRN (Learner Reference Number)</label><input class="form-input" name="lrn" id="edit-lrn" placeholder="12-digit LRN"/></div>
+      <div class="form-row"><label class="form-label">RFID code</label><input class="form-input" name="rfid_code" id="edit-rfid"/></div>
+      <div class="form-row"><label class="form-label">Section</label><input class="form-input" name="section" id="edit-section"/></div>
+      <div class="form-row"><label class="form-label">Parent name</label><input class="form-input" name="parent_name" id="edit-pname"/></div>
+      <div class="form-row"><label class="form-label">Parent phone</label><input class="form-input" name="parent_phone" id="edit-pphone"/></div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-cancel" onclick="closeModal('edit-modal')">Cancel</button>
+        <button type="submit" class="btn btn-green">Save changes</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- STATUS MODAL -->
+<div class="modal-backdrop" id="status-modal">
+  <div class="modal">
+    <div class="modal-title">📋 Update student status</div>
+    <div id="status-student-name" style="font-size:14px;font-weight:600;margin-bottom:16px;color:var(--text)"></div>
+    <form method="POST" id="status-form">
+      <input type="hidden" name="section_filter" value="{{ selected_section or '' }}"/>
+      <div class="form-row">
+        <label class="form-label">Status</label>
+        <select class="form-select" name="status" id="status-select">
+          <option value="active">✅ Active — currently enrolled</option>
+          <option value="dropped">❌ Dropped out</option>
+          <option value="transferred">🔄 Transferred to another school</option>
+          <option value="other">📝 Other</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label class="form-label">Reason / notes (optional)</label>
+        <textarea class="form-textarea" name="reason" id="status-reason" placeholder="e.g. Transferred to Davao City National High School"></textarea>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-cancel" onclick="closeModal('status-modal')">Cancel</button>
+        <button type="submit" class="btn btn-green">Update status</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- IMPORT MODAL -->
+<div class="modal-backdrop" id="import-modal">
+  <div class="modal" style="max-height:90vh;overflow-y:auto">
+    <div class="modal-title">⬆ Import Students</div>
+
+    <!-- STEP 1: Get Template -->
+    <div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:14px">
+      <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:6px">📋 STEP 1 — Get the template</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.7">
+        Open the Google Sheet template, fill in your students, then download it as a CSV file
+        (<strong>File → Download → CSV</strong>) and upload it below.
+      </div>
+      <a href="https://docs.google.com/spreadsheets/d/1HvTro_6aWUPJKUgUUAvOPCDQUpuDZEtMIDy2NJbHzpo/copy" target="_blank" class="btn btn-blue" style="width:100%;text-align:center;display:block;text-decoration:none">
+        📋 Open Student Template (Google Sheets)
+      </a>
+    </div>
+
+    <!-- STEP 2: Upload New Students -->
+    <div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:14px">
+      <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:6px">➕ STEP 2 — Upload new students</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.7">
+        Safely adds new students and updates existing ones.<br/>
+        <strong>Never deletes students or attendance records.</strong><br/>
+        Messenger links are always preserved.
+      </div>
+      <form method="POST" action="/students/import_merge" enctype="multipart/form-data">
+        <input type="hidden" name="section_filter" value="{{ selected_section or '' }}"/>
+        <input class="form-input" type="file" name="file" accept=".xlsx,.csv" required style="margin-bottom:8px"/>
+        <button type="submit" class="btn btn-green" style="width:100%">➕ Add / Update Students</button>
+      </form>
+    </div>
+
+    <!-- RESTORE FROM BACKUP -->
+    <div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:14px">
+      <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:6px">🔄 Restore from Backup</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.7">
+        Use only with a file exported from this system's <strong>Export</strong> button.<br/>
+        Restores students including their Messenger links.
+      </div>
+      <form method="POST" action="/students/import_merge" enctype="multipart/form-data">
+        <input type="hidden" name="section_filter" value="{{ selected_section or '' }}"/>
+        <input class="form-input" type="file" name="file" accept=".xlsx,.csv" required style="margin-bottom:8px"/>
+        <button type="submit" class="btn btn-outline" style="width:100%">🔄 Restore from Backup</button>
+      </form>
+    </div>
+
+    <div class="modal-actions"><button type="button" class="btn btn-cancel" onclick="closeModal('import-modal')">Close</button></div>
+  </div>
+</div>
+
+<script>
+function updateTracker(studentId, field, checked) {
+  const formData = new FormData();
+  formData.append('field', field);
+  formData.append('value', checked ? '1' : '0');
+  fetch(`/students/tracker/${studentId}`, { method: 'POST', body: formData })
+    .catch(err => console.error('Tracker update failed:', err));
+}
+
+function openAdd(){document.getElementById('add-modal').classList.add('open');document.getElementById('add-rfid').focus();}
+function openImport(){document.getElementById('import-modal').classList.add('open');}
+function closeModal(id){document.getElementById(id).classList.remove('open');}
+document.querySelectorAll('.modal-backdrop').forEach(b=>b.addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');}));
+
+function openEdit(id,rfid,name,lrn,section,pname,pphone,photo){
+  document.getElementById('edit-form').action=`/students/edit/${id}`;
+  document.getElementById('edit-name').value=name;
+  document.getElementById('edit-lrn').value=lrn||'';
+  document.getElementById('edit-rfid').value=rfid;
+  document.getElementById('edit-section').value=section;
+  document.getElementById('edit-pname').value=pname;
+  document.getElementById('edit-pphone').value=pphone;
+  const preview=document.getElementById('edit-photo-preview');
+  const icon=document.getElementById('edit-photo-icon');
+  if(photo){preview.src=`/static/uploads/${photo}`;preview.style.display='block';icon.style.display='none';}
+  else{preview.style.display='none';icon.style.display='block';}
+  document.getElementById('edit-modal').classList.add('open');
+}
+
+function openStatus(id,name,status,reason){
+  document.getElementById('status-form').action=`/students/status/${id}`;
+  document.getElementById('status-student-name').textContent=name;
+  document.getElementById('status-select').value=status||'active';
+  document.getElementById('status-reason').value=reason||'';
+  document.getElementById('status-modal').classList.add('open');
+}
+
+function previewPhoto(input,previewId,iconId){
+  const file=input.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    const p=document.getElementById(previewId);p.src=e.target.result;p.style.display='block';
+    document.getElementById(iconId).style.display='none';
+  };reader.readAsDataURL(file);
+}
+
+function filterTable(){
+  const q=document.getElementById('search').value.toLowerCase();
+  updateVisible(q,currentStatus);
+}
+
+let currentStatus='all';
+function filterStatus(status,btn){
+  currentStatus=status;
+  document.querySelectorAll('.filter-tab').forEach(t=>t.classList.remove('active'));
+  btn.classList.add('active');
+  updateVisible(document.getElementById('search').value.toLowerCase(),status);
+}
+
+function updateVisible(q,status){
+  const rows=document.querySelectorAll('#student-table tbody tr');
+  let visible=0;
+  rows.forEach(row=>{
+    const matchSearch=row.dataset.search.includes(q);
+    const matchStatus=status==='all'||row.dataset.status===status;
+    row.style.display=(matchSearch&&matchStatus)?'':'none';
+    if(matchSearch&&matchStatus)visible++;
+  });
+  document.getElementById('visible-count').textContent=visible;
+}
+</script>
+</body>
+</html>

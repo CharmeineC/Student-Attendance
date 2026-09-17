@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<title>Parent Slips — {{ school_name }}</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  :root{--bg:#f5f6fa;--card:#fff;--border:#e0e4ef;--blue:#2563eb;--navy:#1a3c5e;--text:#1a1d2e;--muted:#6b7280;--shadow:0 2px 12px rgba(0,0,0,.07)}
+  body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;}
+
+  /* Screen UI */
+  .topbar{background:var(--card);border-bottom:2px solid var(--border);padding:12px 24px;display:flex;align-items:center;justify-content:space-between;box-shadow:var(--shadow);}
+  .page-title{font-size:16px;font-weight:700;}
+  .nav-links{display:flex;gap:6px;}
+  .nav-link{padding:6px 12px;border-radius:6px;font-size:12px;font-weight:500;color:var(--muted);text-decoration:none;border:1px solid transparent;transition:all .15s;}
+  .nav-link:hover{color:var(--text);background:var(--bg);border-color:var(--border);}
+  .controls{padding:16px 24px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;background:var(--card);border-bottom:1px solid var(--border);}
+  .form-select{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 12px;color:var(--text);font-size:13px;outline:none;}
+  .btn{padding:9px 18px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:none;font-family:'Inter',sans-serif;display:inline-flex;align-items:center;gap:6px;text-decoration:none;}
+  .btn-blue{background:var(--blue);color:#fff;}
+  .btn-outline{background:transparent;color:var(--text);border:1px solid var(--border);}
+  .count-badge{background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:6px 12px;font-size:12px;color:var(--blue);font-weight:600;}
+  .tip{background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:12px 16px;font-size:12px;color:#92400e;margin:16px 24px;}
+  .slips-grid{padding:24px;display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:16px;}
+
+  /* Individual slip */
+  .slip{background:white;padding:18px;border:2px solid var(--navy);border-radius:8px;font-family:'Arial',sans-serif;page-break-inside:avoid;}
+  .slip-header{text-align:center;border-bottom:2px solid var(--navy);padding-bottom:10px;margin-bottom:12px;}
+  .slip-school{font-size:12px;font-weight:700;color:var(--navy);text-transform:uppercase;letter-spacing:1px;}
+  .slip-sub{font-size:10px;color:var(--muted);margin-top:2px;}
+  .info-tbl{width:100%;border-collapse:collapse;margin-bottom:12px;}
+  .info-tbl td{padding:4px 6px;font-size:11px;border-bottom:1px solid #f3f4f6;}
+  .info-tbl .lbl{color:var(--muted);font-weight:700;width:38%;}
+  .info-tbl .val{color:var(--navy);font-weight:700;}
+  .code-box{background:#eff6ff;border:2px solid #bfdbfe;border-radius:6px;padding:10px;text-align:center;margin-bottom:12px;}
+  .code-lbl{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px;}
+  .code-val{font-size:20px;font-weight:900;color:#1d4ed8;font-family:'Courier New',monospace;letter-spacing:4px;}
+  .code-hint{font-size:9px;color:var(--muted);margin-top:3px;font-style:italic;}
+  .inst{border-top:1px solid var(--navy);padding-top:10px;}
+  .inst-title{font-size:10px;font-weight:700;color:var(--navy);text-align:center;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;}
+  .inst-block{margin-bottom:8px;padding:6px 8px;background:#f9fafb;border-radius:5px;border-left:3px solid var(--navy);}
+  .inst-ch{font-size:10px;font-weight:700;color:var(--navy);margin-bottom:3px;}
+  .inst-en{font-size:9.5px;color:#374151;line-height:1.6;}
+  .inst-fil{font-size:9.5px;color:var(--muted);font-style:italic;line-height:1.6;margin-top:2px;}
+  .step-code{background:#dbeafe;padding:0 4px;border-radius:2px;font-family:'Courier New',monospace;font-weight:700;color:#1d4ed8;}
+
+  /* Print — 2 per row on A4 */
+  @media print {
+    .topbar,.controls,.tip{display:none!important;}
+    body{background:white;}
+    .slips-grid{
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:6mm;
+      padding:8mm;
+    }
+    .slip{border:2px solid #1a3c5e;box-shadow:none;}
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="page-title">📄 Parent Notification Slips</div>
+  <div class="nav-links">
+    <a href="/"         class="nav-link">📡 Scanner</a>
+    <a href="/students" class="nav-link">👥 Students</a>
+    <a href="/settings" class="nav-link">⚙️ Settings</a>
+  </div>
+</div>
+
+<div class="controls">
+  <form method="GET" action="/slips" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+    <select class="form-select" name="section" onchange="this.form.submit()">
+      <option value="">All active students ({{ students|length }})</option>
+      {% for sec in sections %}
+      <option value="{{ sec }}" {% if sec == selected_section %}selected{% endif %}>{{ sec }}</option>
+      {% endfor %}
+    </select>
+    <span class="count-badge">{{ students|length }} slips</span>
+  </form>
+  <button class="btn btn-blue" onclick="window.print()">🖨️ Print all (2 per page)</button>
+  <a href="/students" class="btn btn-outline">← Back to Students</a>
+</div>
+
+<div class="tip">
+  💡 Click <strong>Print all</strong> to print 2 slips per A4 page — ready to cut and distribute.<br/>
+  To save a single slip as image, go to <strong>Students → 📄</strong> next to a student, then right-click the slip to save.
+  Only <strong>active</strong> students are shown.
+</div>
+
+<div class="slips-grid">
+  {% for s in students %}
+  <div class="slip">
+    <div class="slip-header">
+      <div class="slip-school">{{ school_name }}</div>
+      <div class="slip-sub">Parent Notification Setup Slip — Abiso para sa Magulang</div>
+    </div>
+
+    <table class="info-tbl">
+      <tr><td class="lbl">Student</td><td class="val">{{ s.full_name }}</td></tr>
+      {% if s.lrn %}<tr><td class="lbl">LRN</td><td class="val">{{ s.lrn }}</td></tr>{% endif %}
+      <tr><td class="lbl">Section</td><td class="val">{{ s.section or '—' }}</td></tr>
+    </table>
+
+    {% if s.rfid_code %}
+    <div class="code-box">
+      <div class="code-lbl">RFID Code — send this in Messenger</div>
+      <div class="code-val">{{ s.rfid_code }}</div>
+      <div class="code-hint">Ipadala ang code na ito sa Messenger</div>
+    </div>
+    {% endif %}
+
+    <div class="inst">
+      <div class="inst-title">📲 How to receive notifications — Paano makatanggap ng abiso</div>
+
+      <div class="inst-block">
+        <div class="inst-ch">💬 Facebook Messenger</div>
+        <div class="inst-en">Search <strong>{{ school_name }}</strong> on Facebook → Message → Send: <span class="step-code">{{ s.rfid_code }}</span></div>
+        <div class="inst-fil">Hanapin ang <strong>{{ school_name }}</strong> sa Facebook → Message → Ipadala: <span class="step-code">{{ s.rfid_code }}</span></div>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+</body>
+</html>

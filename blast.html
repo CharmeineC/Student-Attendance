@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Blast Message — {{ school_name }}</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  :root{--bg:#f5f6fa;--surface:#fff;--card:#fff;--border:#e0e4ef;--green:#00b87a;--blue:#2563eb;--amber:#d97706;--red:#dc2626;--text:#1a1d2e;--muted:#6b7280;--shadow:0 2px 12px rgba(0,0,0,0.07)}
+  body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;min-height:100vh}
+  .topbar{background:var(--surface);border-bottom:2px solid var(--border);padding:12px 24px;display:flex;align-items:center;justify-content:space-between;box-shadow:var(--shadow)}
+  .page-title{font-size:16px;font-weight:700}
+  .nav-links{display:flex;gap:6px}
+  .nav-link{padding:6px 12px;border-radius:6px;font-size:12px;font-weight:500;color:var(--muted);text-decoration:none;border:1px solid transparent;transition:all .15s}
+  .nav-link:hover,.nav-link.active{color:var(--text);background:var(--bg);border-color:var(--border)}
+  .content{padding:24px;display:grid;grid-template-columns:1fr 1fr;gap:20px;max-width:1100px}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:24px;box-shadow:var(--shadow)}
+  .card-title{font-size:15px;font-weight:700;margin-bottom:6px}
+  .card-desc{font-size:12px;color:var(--muted);margin-bottom:20px;line-height:1.6}
+  .form-row{margin-bottom:16px}
+  .form-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;display:block;font-weight:600}
+  .form-input,.form-select,.form-textarea{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-size:13px;outline:none;font-family:'Inter',sans-serif}
+  .form-input:focus,.form-textarea:focus,.form-select:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(37,99,235,.08)}
+  .form-textarea{resize:vertical;min-height:120px;line-height:1.7}
+  .char-count{font-size:11px;color:var(--muted);text-align:right;margin-top:4px}
+  .char-count.warn{color:var(--amber)}
+  .char-count.over{color:var(--red)}
+
+  /* Channel checkboxes */
+  .channels{display:flex;flex-direction:column;gap:10px}
+  .channel-option{display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid var(--border);border-radius:8px;cursor:pointer;transition:all .15s}
+  .channel-option:hover{border-color:var(--blue);background:#f0f5ff}
+  .channel-option input[type=checkbox]{width:16px;height:16px;accent-color:var(--blue);cursor:pointer;flex-shrink:0}
+  .channel-option.checked{border-color:var(--blue);background:#f0f5ff}
+  .ch-icon{font-size:20px}
+  .ch-name{font-size:13px;font-weight:600}
+  .ch-desc{font-size:11px;color:var(--muted)}
+
+  /* SMS warning */
+  .sms-warning{background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:12px 14px;font-size:12px;color:var(--amber);margin-top:8px;display:none;line-height:1.6}
+  .sms-warning.show{display:block}
+
+  /* Preview box */
+  .preview-box{background:#f0f5ff;border:1px solid #bfdbfe;border-radius:10px;padding:16px;font-size:13px;line-height:1.7;color:var(--text);min-height:80px;white-space:pre-wrap}
+  .preview-label{font-size:11px;color:var(--blue);font-weight:600;margin-bottom:8px}
+
+  /* Estimate */
+  .estimate{background:#ecfdf5;border:1px solid #6ee7b7;border-radius:8px;padding:10px 14px;font-size:12px;color:var(--green);margin-top:12px}
+
+  .btn{padding:10px 20px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;border:none;font-family:'Inter',sans-serif;display:inline-flex;align-items:center;gap:8px;transition:all .15s}
+  .btn-blue{background:var(--blue);color:#fff}
+  .btn-blue:hover{background:#1d4ed8}
+  .btn-blue:disabled{background:#93c5fd;cursor:not-allowed}
+
+  /* History table */
+  .full-width{grid-column:1/-1}
+  table{width:100%;border-collapse:collapse}
+  thead th{padding:10px 14px;font-size:11px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);text-align:left;background:var(--bg);font-weight:600;border-bottom:1px solid var(--border);position:sticky;top:0;z-index:1}
+  .scroll-log{max-height:400px;overflow-y:auto;overflow-x:auto;border:1px solid var(--border);border-radius:8px}
+  tbody td{padding:11px 14px;font-size:13px;border-bottom:1px solid #f3f4f6}
+  tbody tr:last-child td{border-bottom:none}
+  .badge{display:inline-block;padding:2px 10px;border-radius:4px;font-size:11px;font-weight:600}
+  .badge-done{background:#ecfdf5;color:var(--green)}
+  .badge-running{background:#eff6ff;color:var(--blue)}
+  .badge-holiday{background:#fff7ed;color:#d97706}
+  .badge-manual{background:#f3f4f6;color:var(--muted)}
+  .link-btn{background:none;border:none;color:var(--blue);font-size:12px;font-weight:600;cursor:pointer;padding:0;text-decoration:underline}
+  .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:100;align-items:center;justify-content:center}
+  .modal-overlay.open{display:flex}
+  .modal-box{background:#fff;border-radius:12px;padding:24px;max-width:560px;width:90%;max-height:80vh;overflow-y:auto;box-shadow:0 10px 40px rgba(0,0,0,.2)}
+  .modal-close{float:right;background:none;border:none;font-size:18px;cursor:pointer;color:var(--muted)}
+  .recipient-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #f3f4f6;font-size:12px}
+  .recipient-row:last-child{border-bottom:none}
+  .recipient-ok{color:var(--green);font-weight:600}
+  .recipient-fail{color:var(--red);font-weight:600}
+
+  .banner-error{background:#fef2f2;border:1px solid #fca5a5;color:var(--red);padding:12px 16px;border-radius:8px;font-size:13px;grid-column:1/-1}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div class="page-title">📣 Blast Message</div>
+  <div class="nav-links">
+    <a href="/"         class="nav-link">📡 Scanner</a>
+    <a href="/admin"    class="nav-link">📊 Admin</a>
+    <a href="/students" class="nav-link">👥 Students</a>
+    <a href="/reports"  class="nav-link">📋 Reports</a>
+    <a href="/blast"    class="nav-link active">📣 Blast</a>
+    <a href="/settings" class="nav-link">⚙️ Settings</a>
+  </div>
+</div>
+
+<div class="content">
+
+  {% if request.args.get('error') %}
+  <div class="banner-error">❌ {{ request.args.get('error') }}</div>
+  {% endif %}
+
+  <!-- Compose -->
+  <div class="card">
+    <div class="card-title">✍️ Compose blast message</div>
+    <div class="card-desc">Send an announcement to all parents or a specific section. Messages are sent via your chosen channels.</div>
+
+    <form method="POST" action="/blast/send" id="blast-form">
+
+      <div class="form-row">
+        <label class="form-label">Message</label>
+        <textarea class="form-textarea" name="message" id="blast-msg" maxlength="500"
+          placeholder="e.g. Reminder: No classes on June 12 due to Independence Day holiday. School resumes June 13."
+          oninput="updatePreview()"></textarea>
+        <div class="char-count" id="char-count">0 / 160 characters</div>
+      </div>
+
+      <div class="form-row">
+        <label class="form-label">Send to</label>
+        <select class="form-select" name="section" id="section-select" onchange="updateEstimate()">
+          <option value="all">Everyone (all sections)</option>
+          {% for section in sections %}
+          <option value="{{ section }}">{{ section }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-row">
+        <label class="form-label">Send via</label>
+        <div class="channels">
+          <label class="channel-option" id="ch-messenger">
+            <input type="checkbox" name="channels" value="messenger" onchange="updateChannels()"/>
+            <span class="ch-icon">💬</span>
+            <div><div class="ch-name">Facebook Messenger</div><div class="ch-desc">Free — instant via WiFi</div></div>
+          </label>
+          <label class="channel-option" id="ch-sms">
+            <input type="checkbox" name="channels" value="sms" onchange="updateChannels()"/>
+            <span class="ch-icon">✉️</span>
+            <div><div class="ch-name">SMS via SIM800C</div><div class="ch-desc">Uses Globe SIM — takes longer for large groups</div></div>
+          </label>
+        </div>
+        <div class="sms-warning" id="sms-warning">
+          ⚠️ <strong>SMS time estimate:</strong> <span id="sms-time">—</span><br/>
+          The SIM800C sends one SMS at a time (~3-4 seconds each). You can still use the system normally while it runs in the background.
+        </div>
+      </div>
+
+      <div class="estimate" id="estimate" style="display:none">
+        📊 Recipients: <strong id="est-count">—</strong> &nbsp;|&nbsp;
+        Channels: <strong id="est-channels">—</strong>
+      </div>
+
+      <div style="margin-top:20px">
+        <button type="submit" class="btn btn-blue" id="send-btn" disabled>
+          📣 Send blast message
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Preview -->
+  <div class="card">
+    <div class="card-title">👁️ Preview</div>
+    <div class="card-desc">This is exactly what parents will receive.</div>
+    <div class="preview-label">MESSAGE PREVIEW</div>
+    <div class="preview-box" id="preview-box">Start typing your message to see a preview...</div>
+    <div style="margin-top:16px">
+      <div class="form-label" style="margin-bottom:8px">TIPS</div>
+      <div style="font-size:12px;color:var(--muted);line-height:1.8">
+        • Keep it under 160 characters for single SMS<br/>
+        • Use simple, clear language parents will understand<br/>
+        • Include the date if announcing an event<br/>
+        • The school name is added automatically at the end
+      </div>
+    </div>
+  </div>
+
+  <!-- History -->
+  <div class="card full-width">
+    <div class="card-title">📜 Recent blasts</div>
+    {% if recent_blasts %}
+    <table>
+      <thead><tr><th>Date</th><th>Type</th><th>Message</th><th>Section</th><th>Channels</th><th>Sent</th><th>Failed</th><th>Status</th><th></th></tr></thead>
+      <tbody>
+        {% for b in recent_blasts %}
+        <tr>
+          <td style="color:var(--muted);font-size:12px;font-family:monospace">{{ b.created_at[:16] }}</td>
+          <td><span class="badge badge-{{ 'holiday' if b.blast_type == 'holiday' else 'manual' }}">{{ '🏖️ Holiday' if b.blast_type == 'holiday' else 'Manual' }}</span></td>
+          <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ b.message }}</td>
+          <td style="color:var(--muted);font-size:12px">{{ b.section or 'All' }}</td>
+          <td style="font-size:12px">{{ b.channels }}</td>
+          <td style="color:var(--green);font-weight:700">{{ b.sent }}</td>
+          <td style="color:{{ 'var(--red)' if b.failed > 0 else 'var(--muted)' }}">{{ b.failed }}</td>
+          <td><span class="badge badge-{{ b.status }}">{{ b.status }}</span></td>
+          <td><button class="link-btn" onclick="viewRecipients({{ b.id }})">View</button></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p style="color:var(--muted);font-size:13px;padding:20px 0;text-align:center">No blasts sent yet.</p>
+    {% endif %}
+  </div>
+
+  <!-- SMS Queue Log -->
+  <div class="card full-width">
+    <div class="card-title">📶 SMS Queue Log</div>
+    <div class="card-desc">Shows which SIM800C (port) actually handled each SMS, and its status — useful for spotting a specific SIM that keeps failing on a multi-SIM host.</div>
+    <div style="margin-bottom:10px;display:flex;gap:14px;align-items:center">
+      <button type="button" class="link-btn" onclick="loadSmsQueueLog()">🔄 Refresh</button>
+      <button type="button" class="link-btn" style="color:var(--red)" onclick="cancelAllPendingSms()">🛑 Cancel all pending</button>
+      <button type="button" class="link-btn" onclick="clearCancelledSms()">🧹 Clear cancelled</button>
+    </div>
+    <div class="scroll-log">
+      <div id="sms-queue-log">Loading...</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Recipient detail modal -->
+<div class="modal-overlay" id="recipient-modal" onclick="if(event.target===this) closeRecipientModal()">
+  <div class="modal-box">
+    <button class="modal-close" onclick="closeRecipientModal()">✕</button>
+    <div class="card-title" style="margin-bottom:14px">Delivery detail</div>
+    <div id="recipient-modal-body">Loading...</div>
+  </div>
+</div>
+
+<script>
+const schoolName = "{{ school_name }}";
+let totalStudents = {{ sections|length > 0 and 1 or 0 }};
+
+// Load student count
+fetch('/api/today_stats').then(r=>r.json()).then(data => {
+  totalStudents = data.stats.total_students || 0;
+  updateEstimate();
+});
+
+function updatePreview() {
+  const msg  = document.getElementById('blast-msg').value;
+  const prev = document.getElementById('preview-box');
+  const cc   = document.getElementById('char-count');
+  const len  = msg.length;
+  prev.textContent = msg ? `${msg}\n— ${schoolName}` : 'Start typing your message to see a preview...';
+  cc.textContent   = `${len} / 160 characters`;
+  cc.className     = 'char-count' + (len > 160 ? ' over' : len > 130 ? ' warn' : '');
+  updateSendBtn();
+}
+
+function updateChannels() {
+  ['messenger','sms'].forEach(ch => {
+    const el  = document.getElementById(`ch-${ch}`);
+    const inp = el.querySelector('input');
+    el.classList.toggle('checked', inp.checked);
+  });
+  // Show SMS warning if SMS is checked
+  const smsChecked = document.querySelector('input[value=sms]').checked;
+  document.getElementById('sms-warning').classList.toggle('show', smsChecked);
+  updateEstimate();
+  updateSendBtn();
+}
+
+function updateEstimate() {
+  const sel      = document.getElementById('section-select').value;
+  const count    = sel === 'all' ? totalStudents : '?';
+  const checked  = [...document.querySelectorAll('input[name=channels]:checked')].map(i=>i.value);
+  const est      = document.getElementById('estimate');
+  if (checked.length > 0) {
+    est.style.display = 'block';
+    document.getElementById('est-count').textContent   = count;
+    document.getElementById('est-channels').textContent = checked.join(', ');
+  } else {
+    est.style.display = 'none';
+  }
+  // SMS time estimate
+  if (document.querySelector('input[value=sms]').checked) {
+    const n    = sel === 'all' ? totalStudents : 50;
+    const mins = Math.ceil(n * 4 / 60);
+    document.getElementById('sms-time').textContent =
+      `~${mins} minutes for ${n} students`;
+  }
+}
+
+function updateSendBtn() {
+  const hasMsg      = document.getElementById('blast-msg').value.trim().length > 0;
+  const hasChannels = document.querySelectorAll('input[name=channels]:checked').length > 0;
+  document.getElementById('send-btn').disabled = !(hasMsg && hasChannels);
+}
+
+// Confirm before sending
+document.getElementById('blast-form').addEventListener('submit', function(e) {
+  const count   = document.getElementById('est-count').textContent;
+  const channels = [...document.querySelectorAll('input[name=channels]:checked')].map(i=>i.value).join(', ');
+  if (!confirm(`Send blast to ${count} parents via ${channels}?\n\nThis cannot be undone.`)) {
+    e.preventDefault();
+  }
+});
+
+function viewRecipients(blastId) {
+  const modal = document.getElementById('recipient-modal');
+  const body  = document.getElementById('recipient-modal-body');
+  body.innerHTML = 'Loading...';
+  modal.classList.add('open');
+
+  fetch(`/api/blast_recipients/${blastId}`)
+    .then(r => r.json())
+    .then(data => {
+      if (!data.recipients || data.recipients.length === 0) {
+        body.innerHTML = '<p style="color:var(--muted);font-size:13px">No per-recipient detail recorded for this blast.</p>';
+        return;
+      }
+      const okCount = data.recipients.filter(r => r.success).length;
+      const failCount = data.recipients.length - okCount;
+      let html = `<div style="font-size:12px;color:var(--muted);margin-bottom:14px">
+        ${okCount} delivered &middot; ${failCount} failed &middot; ${data.recipients.length} total
+      </div>`;
+      data.recipients.forEach(r => {
+        html += `<div class="recipient-row">
+          <div>
+            <div style="font-weight:500">${r.student_name || 'Unknown'}</div>
+            <div style="color:var(--muted);font-size:11px">${r.section || ''}</div>
+          </div>
+          <div style="text-align:right">
+            <div class="${r.success ? 'recipient-ok' : 'recipient-fail'}">
+              ${r.success ? '✅ ' + r.channel : '❌ Failed'}
+            </div>
+          </div>
+        </div>`;
+      });
+      body.innerHTML = html;
+    })
+    .catch(() => { body.innerHTML = '<p style="color:var(--red);font-size:13px">Error loading detail.</p>'; });
+}
+
+function closeRecipientModal() {
+  document.getElementById('recipient-modal').classList.remove('open');
+}
+
+function loadSmsQueueLog() {
+  const container = document.getElementById('sms-queue-log');
+  container.innerHTML = 'Loading...';
+  fetch('/api/sms_queue/recent')
+    .then(r => r.json())
+    .then(data => {
+      if (!data.jobs || data.jobs.length === 0) {
+        container.innerHTML = '<p style="color:var(--muted);font-size:13px;padding:10px 0;text-align:center">No SMS jobs yet.</p>';
+        return;
+      }
+      const statusColor = { sent: 'var(--green)', failed: 'var(--red)', pending: '#d97706', claimed: 'var(--blue)', cancelled: 'var(--muted)' };
+      let html = `<table><thead><tr>
+        <th>Time</th><th>Phone</th><th>Message</th><th>Sent Via</th><th>Status</th><th>Error</th><th></th>
+      </tr></thead><tbody>`;
+      data.jobs.forEach(j => {
+        const color = statusColor[j.status] || 'var(--muted)';
+        const cancelBtn = j.status === 'pending'
+          ? `<button class="link-btn" style="color:var(--red)" onclick="cancelOneSms(${j.id})">Cancel</button>`
+          : '';
+        html += `<tr>
+          <td style="font-size:11px;color:var(--muted);font-family:monospace">${j.created_at}</td>
+          <td style="font-size:12px">${j.phone_number}</td>
+          <td style="font-size:12px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${j.message}</td>
+          <td style="font-size:12px;font-weight:600">${j.sent_via || '—'}</td>
+          <td><span style="color:${color};font-weight:700;font-size:12px">${j.status}</span></td>
+          <td style="font-size:11px;color:var(--red)">${j.error_message || ''}</td>
+          <td>${cancelBtn}</td>
+        </tr>`;
+      });
+      html += '</tbody></table>';
+      container.innerHTML = html;
+    })
+    .catch(() => { container.innerHTML = '<p style="color:var(--red);font-size:13px">Error loading queue log.</p>'; });
+}
+
+function cancelOneSms(jobId) {
+  if (!confirm('Cancel this queued SMS?')) return;
+  fetch(`/api/sms_queue/cancel/${jobId}`, { method: 'POST' })
+    .then(r => r.json())
+    .then(() => loadSmsQueueLog())
+    .catch(() => alert('Error cancelling.'));
+}
+
+function cancelAllPendingSms() {
+  if (!confirm('Cancel ALL pending SMS jobs? This cannot be undone.')) return;
+  fetch('/api/sms_queue/cancel_all_pending', { method: 'POST' })
+    .then(r => r.json())
+    .then(data => {
+      alert(data.message || 'Done.');
+      loadSmsQueueLog();
+    })
+    .catch(() => alert('Error cancelling.'));
+}
+
+function clearCancelledSms() {
+  if (!confirm('Remove all cancelled jobs from this log? Sent, failed, and pending jobs are kept.')) return;
+  fetch('/api/sms_queue/clear_cancelled', { method: 'POST' })
+    .then(r => r.json())
+    .then(data => {
+      alert(data.message || 'Done.');
+      loadSmsQueueLog();
+    })
+    .catch(() => alert('Error clearing.'));
+}
+
+loadSmsQueueLog();
+</script>
+</body>
+</html>

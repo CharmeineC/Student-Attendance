@@ -1,0 +1,91 @@
+<!-- admin.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Admin — {{ school_name }}</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap" rel="stylesheet"/>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root { --bg:#f5f6fa;--surface:#ffffff;--card:#ffffff;--border:#e0e4ef;--green:#00b87a;--blue:#2563eb;--amber:#d97706;--red:#dc2626;--text:#1a1d2e;--muted:#6b7280; }
+  body { background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;min-height:100vh; }
+  .topbar { background:var(--surface);border-bottom:1px solid var(--border);padding:12px 24px;display:flex;align-items:center;justify-content:space-between; }
+  .page-title { font-size:16px;font-weight:700; }
+  .nav-links { display:flex;gap:8px; }
+  .nav-link { padding:6px 14px;border-radius:6px;font-size:12px;font-weight:500;color:var(--muted);text-decoration:none;border:1px solid transparent;transition:all .15s; }
+  .nav-link:hover,.nav-link.active { color:var(--text);background:var(--card);border-color:var(--border); }
+  .content { padding:24px; }
+  .page-header { display:flex;justify-content:space-between;align-items:center;margin-bottom:20px; }
+  .today-date { font-size:13px;color:var(--muted); }
+  .stats { display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px; }
+  .stat-card { background:var(--card);border:1px solid var(--border);border-radius:10px;padding:20px;position:relative;overflow:hidden; }
+  .stat-card::after { content:'';position:absolute;bottom:0;left:0;right:0;height:3px; }
+  .s-total::after{background:var(--blue)}.s-in::after{background:var(--green)}.s-out::after{background:var(--amber)}.s-absent::after{background:var(--red)}
+  .stat-val { font-size:32px;font-weight:900;font-variant-numeric:tabular-nums; }
+  .stat-label { font-size:11px;color:var(--muted);margin-top:4px; }
+  .s-total .stat-val{color:var(--blue)}.s-in .stat-val{color:var(--green)}.s-out .stat-val{color:var(--amber)}.s-absent .stat-val{color:var(--red)}
+  .table-wrap { background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden; }
+  table { width:100%;border-collapse:collapse; }
+  thead th { padding:12px 16px;font-size:11px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);text-align:left;background:var(--surface);font-weight:600;border-bottom:1px solid var(--border); }
+  tbody td { padding:11px 16px;font-size:13px;border-bottom:1px solid rgba(255,255,255,.03); }
+  tbody tr:last-child td { border-bottom:none; }
+  tbody tr:hover { background:rgba(255,255,255,.02); }
+  .badge { display:inline-block;padding:3px 10px;border-radius:4px;font-size:11px;font-weight:700;letter-spacing:.5px; }
+  .badge-in  { background:rgba(0,229,160,.15);color:var(--green); }
+  .badge-out { background:rgba(255,176,32,.15);color:var(--amber); }
+  .photo { width:32px;height:32px;border-radius:50%;object-fit:cover;border:2px solid var(--border); }
+  .avatar { width:32px;height:32px;border-radius:50%;background:var(--border);display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:var(--green); }
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div class="page-title">📊 Admin Dashboard</div>
+  <div class="nav-links">
+    <a href="/"         class="nav-link">📡 Scanner</a>
+    <a href="/admin"    class="nav-link active">📊 Admin</a>
+    <a href="/students" class="nav-link">👥 Students</a>
+    <a href="/reports"  class="nav-link">📋 Reports</a>
+    <a href="/blast" class="nav-link">📣 Blast</a>
+    <a href="/settings" class="nav-link">⚙️ Settings</a>
+  </div>
+</div>
+<div class="content">
+  <div class="page-header">
+    <h2 style="font-size:18px">Today's Attendance</h2>
+    <span class="today-date">{{ today }}</span>
+  </div>
+  <div class="stats">
+    <div class="stat-card s-total"><div class="stat-val">{{ stats.total }}</div><div class="stat-label">Students scanned</div></div>
+    <div class="stat-card s-in">  <div class="stat-val">{{ stats.in }}</div>   <div class="stat-label">Currently inside</div></div>
+    <div class="stat-card s-out"> <div class="stat-val">{{ stats.out }}</div>  <div class="stat-label">Logged out</div></div>
+    <div class="stat-card s-absent"><div class="stat-val">{{ stats.not_yet }}</div><div class="stat-label">Not yet scanned</div></div>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Photo</th><th>Student</th><th>Section</th><th>Time</th><th>Status</th><th>Notified</th></tr></thead>
+      <tbody>
+        {% for log in logs %}
+        <tr>
+          <td>
+            {% if log.photo %}<img src="/static/uploads/{{ log.photo }}" class="photo"/>
+            {% else %}<div class="avatar">{{ log.full_name[0] }}</div>{% endif %}
+          </td>
+          <td><strong>{{ log.full_name }}</strong></td>
+          <td style="color:var(--muted);font-size:12px">{{ log.section }}</td>
+          <td style="font-family:monospace;font-size:12px">{{ log.scan_time }}</td>
+          <td><span class="badge badge-{{ log.scan_type|lower }}">{{ log.scan_type }}</span></td>
+          <td style="font-size:12px;color:var(--muted)">
+            {% if log.notified %}✓ {{ log.notify_channel }}{% else %}pending{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+        {% if not logs %}
+        <tr><td colspan="6" style="text-align:center;padding:32px;color:var(--muted)">No scans recorded today yet.</td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+</body>
+</html>

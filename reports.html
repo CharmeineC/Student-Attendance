@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Reports — {{ school_name }}</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  :root{--bg:#f5f6fa;--surface:#fff;--card:#fff;--border:#e0e4ef;--green:#00b87a;--blue:#2563eb;--text:#1a1d2e;--muted:#6b7280;--shadow:0 2px 12px rgba(0,0,0,.07)}
+  body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;min-height:100vh}
+  .topbar{background:var(--surface);border-bottom:2px solid var(--border);padding:12px 24px;display:flex;align-items:center;justify-content:space-between;box-shadow:var(--shadow)}
+  .page-title{font-size:16px;font-weight:700}
+  .nav-links{display:flex;gap:6px}
+  .nav-link{padding:6px 12px;border-radius:6px;font-size:12px;font-weight:500;color:var(--muted);text-decoration:none;border:1px solid transparent;transition:all .15s}
+  .nav-link:hover,.nav-link.active{color:var(--text);background:var(--bg);border-color:var(--border)}
+  .content{padding:24px;max-width:680px}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:28px;margin-bottom:20px;box-shadow:var(--shadow)}
+  .card-title{font-size:15px;font-weight:700;margin-bottom:6px}
+  .card-desc{font-size:12px;color:var(--muted);margin-bottom:20px;line-height:1.6}
+  .form-row{margin-bottom:14px}
+  .form-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px;display:block;font-weight:600}
+  .form-input,.form-select{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--text);font-size:13px;outline:none;font-family:'Inter',sans-serif}
+  .form-input:focus,.form-select:focus{border-color:var(--blue)}
+  .btn{padding:10px 20px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:none;font-family:'Inter',sans-serif;display:inline-flex;align-items:center;gap:6px}
+  .btn-green{background:var(--green);color:#fff}
+  .btn-green:hover{background:#009e68}
+  .hint{font-size:12px;color:var(--muted);margin-top:6px}
+  .filter-group{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div class="page-title">📋 Reports</div>
+  <div class="nav-links">
+    <a href="/"         class="nav-link">📡 Scanner</a>
+    <a href="/admin"    class="nav-link">📊 Admin</a>
+    <a href="/students" class="nav-link">👥 Students</a>
+    <a href="/reports"  class="nav-link active">📋 Reports</a>
+    <a href="/blast"    class="nav-link">📣 Blast</a>
+    <a href="/settings" class="nav-link">⚙️ Settings</a>
+  </div>
+</div>
+<div class="content">
+  <div class="card">
+    <div class="card-title">📥 Export Monthly Attendance Report</div>
+    <div class="card-desc">
+      Select the month, year, and optionally filter by grade level or section.
+      Leave section blank to export all students in one file.
+    </div>
+    <form action="/reports/export" method="GET">
+
+      <div class="filter-group">
+        <div class="form-row">
+          <label class="form-label">Month</label>
+          <select class="form-select" name="month">
+            {% for m in range(1,13) %}
+            <option value="{{ m }}" {% if m == current_month %}selected{% endif %}>
+              {{ ['','January','February','March','April','May','June','July',
+                  'August','September','October','November','December'][m] }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-row">
+          <label class="form-label">Year</label>
+          <input class="form-input" type="number" name="year"
+                 value="{{ current_year }}" min="2024" max="2030"/>
+        </div>
+      </div>
+
+      <!-- Grade level filter -->
+      <div class="form-row">
+        <label class="form-label">Grade Level (optional)</label>
+        <select class="form-select" name="grade_level" id="grade-select" onchange="filterSections()">
+          <option value="">All grade levels</option>
+          {% set grades = [] %}
+          {% for sec in sections %}
+            {% set grade = sec.split('-')[0].strip() if '-' in sec else sec.strip() %}
+            {% if grade not in grades %}
+              {% set _ = grades.append(grade) %}
+              <option value="{{ grade }}">{{ grade }}</option>
+            {% endif %}
+          {% endfor %}
+        </select>
+        <div class="hint">Selecting a grade level filters the section dropdown below.</div>
+      </div>
+
+      <!-- Section filter -->
+      <div class="form-row">
+        <label class="form-label">Section (optional)</label>
+        <select class="form-select" name="section" id="section-select">
+          <option value="">All sections</option>
+          {% for sec in sections %}
+          <option value="{{ sec }}" data-grade="{{ sec.split('-')[0].strip() if '-' in sec else sec.strip() }}">
+            {{ sec }}
+          </option>
+          {% endfor %}
+        </select>
+        <div class="hint">Leave blank to include all sections in the report.</div>
+      </div>
+
+      <button type="submit" class="btn btn-green">⬇ Download Excel Report</button>
+    </form>
+  </div>
+</div>
+
+<script>
+function filterSections() {
+  const grade    = document.getElementById('grade-select').value;
+  const secSel   = document.getElementById('section-select');
+  const options  = secSel.querySelectorAll('option');
+
+  // Reset to "All sections"
+  secSel.value = '';
+
+  options.forEach(opt => {
+    if (opt.value === '') {
+      opt.style.display = '';
+      opt.text = grade ? `All sections in ${grade}` : 'All sections';
+    } else {
+      opt.style.display = (!grade || opt.dataset.grade === grade) ? '' : 'none';
+    }
+  });
+}
+</script>
+</body>
+</html>

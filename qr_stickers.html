@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>QR Stickers — {{ school_name }}</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{--bg:#f5f6fa;--card:#fff;--border:#e0e4ef;--blue:#2563eb;--green:#00b87a;--text:#1a1d2e;--muted:#6b7280;--shadow:0 2px 12px rgba(0,0,0,0.07)}
+  body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif}
+
+  .topbar{background:var(--card);border-bottom:2px solid var(--border);padding:12px 24px;display:flex;align-items:center;justify-content:space-between;box-shadow:var(--shadow)}
+  .page-title{font-size:16px;font-weight:700}
+  .nav-links{display:flex;gap:6px;flex-wrap:wrap}
+  .nav-link{padding:6px 12px;border-radius:6px;font-size:12px;font-weight:500;color:var(--muted);text-decoration:none;border:1px solid transparent;transition:all .15s}
+  .nav-link:hover,.nav-link.active{color:var(--text);background:var(--bg);border-color:var(--border)}
+
+  .controls{padding:16px 24px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;background:var(--card);border-bottom:1px solid var(--border)}
+  .form-select{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 12px;color:var(--text);font-size:13px;outline:none;font-family:'Inter',sans-serif}
+  .form-select:focus{border-color:var(--blue)}
+  .btn{padding:9px 18px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:none;font-family:'Inter',sans-serif;display:inline-flex;align-items:center;gap:6px;transition:all .15s;text-decoration:none}
+  .btn-blue{background:var(--blue);color:#fff}
+  .btn-blue:hover{background:#1d4ed8}
+  .btn-outline{background:transparent;color:var(--text);border:1px solid var(--border)}
+  .count-badge{background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:6px 12px;font-size:12px;color:var(--blue);font-weight:600}
+  .warning-box{background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:12px 16px;font-size:12px;color:#92400e;margin:16px 24px 0;line-height:1.7}
+  .no-page-id{background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;padding:16px;margin:16px 24px;font-size:13px;color:#991b1b}
+  .preview-area{padding:24px}
+
+  /* Print */
+  @media print {
+    .topbar,.controls,.warning-box,.preview-area>.print-tip{display:none!important}
+    body{background:white}
+    .sticker-page{margin:0;padding:6mm;box-shadow:none;border:none;page-break-after:always}
+    .sticker-page:last-child{page-break-after:avoid}
+  }
+
+  /* Sticker sheet */
+  .sticker-page{width:210mm;background:white;margin:0 auto 24px;padding:6mm;box-shadow:var(--shadow);border:1px solid var(--border)}
+  .sticker-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:2.5mm}
+
+  /* Individual sticker — 2x2 inch */
+  .sticker{
+    width:100%;aspect-ratio:1;
+    border:1px dashed #bbb;border-radius:2mm;
+    padding:2mm;
+    display:flex;flex-direction:column;align-items:center;
+    background:white;overflow:hidden;page-break-inside:avoid;
+  }
+  .sticker-school{font-size:5pt;font-weight:700;color:#1d4ed8;text-align:center;text-transform:uppercase;letter-spacing:.3px;line-height:1.2;width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .sticker-name{font-size:6.5pt;font-weight:700;color:#1a1d2e;text-align:center;line-height:1.2;width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:1mm}
+  .sticker-section{font-size:5pt;color:#6b7280;text-align:center;line-height:1.2;width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .sticker-qr-row{display:flex;gap:2mm;justify-content:center;align-items:center;flex:1;padding:1mm 0}
+  .sticker-qr-item{display:flex;flex-direction:column;align-items:center;gap:.5mm}
+  .sticker-qr-label{font-size:4pt;color:#6b7280;text-align:center;font-weight:600}
+  .sticker-qr-item canvas,.sticker-qr-item img{width:36px!important;height:36px!important}
+  .sticker-instruction{font-size:4pt;color:#2563eb;text-align:center;line-height:1.3}
+  .sticker-rfid{font-size:3.5pt;color:#9ca3af;font-family:monospace;text-align:center;margin-top:.5mm}
+  .sticker-empty{border:1px dashed #e5e7eb;background:#fafafa}
+  .page-num{font-size:7pt;color:#9ca3af;text-align:right;padding-top:2mm}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="page-title">🔲 QR Sticker Sheet</div>
+  <div class="nav-links">
+    <a href="/"            class="nav-link">📡 Scanner</a>
+    <a href="/admin"       class="nav-link">📊 Admin</a>
+    <a href="/students"    class="nav-link">👥 Students</a>
+    <a href="/reports"     class="nav-link">📋 Reports</a>
+    <a href="/blast"       class="nav-link">📣 Blast</a>
+    <a href="/qr_stickers" class="nav-link active">🔲 QR Stickers</a>
+    <a href="/settings"    class="nav-link">⚙️ Settings</a>
+  </div>
+</div>
+
+{% if not page_id %}
+<div class="no-page-id">
+  ⚠️ <strong>Facebook Page ID not set.</strong>
+  Go to <a href="/settings" style="color:#991b1b;font-weight:600">Settings → Facebook Messenger → Page ID</a>
+  and enter it first. You can find it on your Facebook Page → About → Page transparency.
+</div>
+{% endif %}
+
+<div class="controls">
+  <form method="GET" action="/qr_stickers" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+    <select class="form-select" name="section" onchange="this.form.submit()">
+      <option value="">All sections ({{ students|length }} students)</option>
+      {% for sec in sections %}
+      <option value="{{ sec }}" {% if sec == selected_section %}selected{% endif %}>{{ sec }}</option>
+      {% endfor %}
+    </select>
+    <span class="count-badge">
+      {{ students|length }} stickers →
+      {{ ((students|length - 1) // 20 + 1) if students else 0 }} pages
+    </span>
+  </form>
+  <button class="btn btn-blue" onclick="window.print()">🖨️ Print stickers</button>
+  <a href="/students" class="btn btn-outline">← Students</a>
+</div>
+
+{% if students and page_id %}
+<div class="warning-box">
+  💡 <strong>Each sticker has a QR code</strong> for Facebook Messenger.
+  Print on A4 sticker paper (20 stickers per page).
+  Make sure every student has an RFID code assigned before printing.
+</div>
+{% endif %}
+
+<div class="preview-area">
+  {% if students and page_id %}
+    {% for i in range(0, students|length, 20) %}
+      {% set page_students = students[i:i+20] %}
+      {% set page_num = loop.index %}
+      <div class="sticker-page">
+        <div class="sticker-grid">
+          {% for student in page_students %}
+          <div class="sticker" id="sticker-{{ student.id }}">
+            <div class="sticker-school">{{ school_name }}</div>
+            <div class="sticker-name">{{ student.full_name }}</div>
+            <div class="sticker-section">{{ student.section }}</div>
+            <div class="sticker-qr-row">
+              <div class="sticker-qr-item">
+                <div id="qr-msg-{{ student.id }}"></div>
+                <div class="sticker-qr-label">Messenger</div>
+              </div>
+            </div>
+            <div class="sticker-instruction">📱 Scan to get attendance alerts</div>
+            {% if student.rfid_code %}
+            <div class="sticker-rfid">{{ student.rfid_code }}</div>
+            {% else %}
+            <div class="sticker-rfid" style="color:#ef4444">No RFID assigned</div>
+            {% endif %}
+          </div>
+          {% endfor %}
+          {% for j in range(page_students|length, 20) %}
+          <div class="sticker sticker-empty"></div>
+          {% endfor %}
+        </div>
+        <div class="page-num">Page {{ page_num }} — {{ school_name }}</div>
+      </div>
+    {% endfor %}
+
+  {% elif not page_id %}
+    <div style="text-align:center;padding:60px;color:var(--muted)">
+      <div style="font-size:48px;margin-bottom:16px">🔲</div>
+      <div style="font-size:15px;font-weight:600">Set your Facebook Page ID first</div>
+      <div style="font-size:13px;margin-top:8px">Go to Settings → Facebook Messenger → Page ID</div>
+    </div>
+  {% else %}
+    <div style="text-align:center;padding:60px;color:var(--muted)">
+      <div style="font-size:48px;margin-bottom:16px">👥</div>
+      <div style="font-size:15px;font-weight:600">No students found</div>
+      <div style="font-size:13px;margin-top:8px">Add students first, then generate QR stickers.</div>
+    </div>
+  {% endif %}
+</div>
+
+<script>
+const PAGE_ID  = "{{ page_id }}";
+
+document.addEventListener('DOMContentLoaded', function() {
+  const students = [
+    {% for student in students %}{% if student.rfid_code %}
+    { id: {{ student.id }}, rfid: "{{ student.rfid_code }}" },
+    {% endif %}{% endfor %}
+  ];
+
+  students.forEach(function(s) {
+    // Messenger QR
+    const msgContainer = document.getElementById('qr-msg-' + s.id);
+    if (msgContainer && PAGE_ID) {
+      try {
+        new QRCode(msgContainer, {
+          text: `https://m.me/${PAGE_ID}?ref=${s.rfid}`,
+          width: 36, height: 36,
+          colorDark: "#1d4ed8", colorLight: "#ffffff",
+          correctLevel: QRCode.CorrectLevel.M
+        });
+      } catch(e) { msgContainer.innerHTML = '<div style="font-size:6px;color:red">Error</div>'; }
+    }
+  });
+});
+</script>
+</body>
+</html>
