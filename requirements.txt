@@ -1,0 +1,25 @@
+# Core app
+Flask==3.0.3
+Werkzeug==3.0.3
+gunicorn==22.0.0
+
+# Database (Railway PostgreSQL)
+psycopg2-binary>=2.9.9,<3.0
+
+# Existing app dependencies (unchanged from local version)
+requests==2.32.3
+openpyxl==3.1.5
+
+# SIM800C support — harmless to include even though Railway itself has no
+# physical serial port; this just lets the "no SIM800C found" code path
+# run cleanly instead of crashing on a missing import. Actual SMS sending
+# still happens on your local host PC's own worker, polling this Railway
+# app's queue — see the migration notes.
+pyserial==3.5
+
+# Optional: bulk photo OCR fallback (filename-based matching doesn't need
+# this at all — only include if you want the OCR fallback to work when
+# deployed on Railway too, which also requires a separate Tesseract system
+# package via a Railway Nixpacks config, not covered by this file alone).
+pytesseract==0.3.13
+pillow==11.0.0
