@@ -9,7 +9,7 @@ Smart notification system:
 import requests
 import time
 import threading
-from database import get_setting, save_setting, mark_notified
+from database import get_setting, save_setting, mark_notified, ph_now
 
 
 def build_message(student_name, scan_type, scan_time, school_name):
@@ -243,7 +243,7 @@ def _is_holiday_mode_active():
     if until:
         try:
             until_dt = _dt.datetime.strptime(until, "%Y-%m-%d")
-            if _dt.datetime.now() > until_dt + _dt.timedelta(days=1):
+            if ph_now() > until_dt + _dt.timedelta(days=1):
                 save_setting("holiday_mode", "0")
                 save_setting("holiday_mode_until", "")
                 return False
@@ -352,7 +352,7 @@ def start_inactivity_scheduler(inactivity_hours=20, recheck_minutes=60,
                     continue
 
                 last_scan = get_last_scan_overall()
-                now = _dt.datetime.now()
+                now = ph_now()
 
                 # A new scan happened since we last checked — activity
                 # resumed, so forget any prior weekday pings; a fresh gap
@@ -543,7 +543,7 @@ def queue_sms(phone_number, message):
         return False
 
 
-def start_sms_queue_worker(poll_seconds=5):
+def start_sms_queue_worker(poll_seconds=5, min_pace_seconds=5, max_pace_seconds=30):
     """
     Runs ON THE HOST, in the background — one independent worker thread
     per SIM800C module actually detected on this PC, exactly like a
@@ -557,11 +557,21 @@ def start_sms_queue_worker(poll_seconds=5):
     pinned port — splitting load across all of them, the same way
     separate PCs would, without needing separate physical computers.
 
+    After each successful send, waits a RANDOM pause (between
+    min_pace_seconds and max_pace_seconds) before claiming the next job
+    — a real backlog of many queued messages would otherwise fire one
+    every ~10-15 seconds continuously (just from normal AT-command
+    timing), which is exactly the kind of steady, mechanical rhythm
+    telco fair-use detection flags as automated bulk sending. Random
+    pacing on top of that makes the pattern look far less like an
+    obvious bot loop.
+
     If no SIM800C is found at startup, prints a warning but doesn't
     crash — the host still runs fine without SMS if none is attached.
 
     Call this once at app startup (e.g. in app.py's __main__ block).
     """
+    import random
     from database import claim_next_sms_job, mark_sms_job_complete
 
     ports = find_all_sim800c_ports()
@@ -582,6 +592,8 @@ def start_sms_queue_worker(poll_seconds=5):
                         job["id"], success,
                         error=None if success else "send failed (see server log)"
                     )
+                    pace = random.uniform(min_pace_seconds, max_pace_seconds)
+                    time.sleep(pace)
                 else:
                     time.sleep(poll_seconds)
             except Exception as e:
@@ -596,7 +608,8 @@ def start_sms_queue_worker(poll_seconds=5):
     port_list = ", ".join(ports)
     print(f"  ✅ SMS queue workers started: {len(ports)} SIM800C device(s) "
           f"found ({port_list}). Each will handle its own share of "
-          f"queued SMS, polling every {poll_seconds}s.")
+          f"queued SMS, pacing {min_pace_seconds}-{max_pace_seconds}s "
+          f"between sends, polling every {poll_seconds}s when idle.")
 
 
 def find_all_sim800c_ports():

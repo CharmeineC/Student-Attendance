@@ -18,7 +18,7 @@ from openpyxl.utils import get_column_letter
 from datetime import datetime, date
 import os
 
-from database import get_logs_for_report, get_setting
+from database import get_logs_for_report, get_setting, ph_now
 
 
 def export_monthly_report(year, month, section=None, output_folder=".", grade_level=None):
@@ -98,7 +98,7 @@ def export_monthly_report(year, month, section=None, output_folder=".", grade_le
 
     # ── Row 3: Generated date ──────────────────────────────────────────────
     ws.merge_cells("A3:H3")
-    ws["A3"] = f"Generated: {datetime.now().strftime('%B %d, %Y at %I:%M %p')}"
+    ws["A3"] = f"Generated: {ph_now().strftime('%B %d, %Y at %I:%M %p')}"
     ws["A3"].font      = Font(italic=True, size=9, color="777777")
     ws["A3"].alignment = Alignment(horizontal="right")
     ws.row_dimensions[3].height = 16
@@ -361,6 +361,6 @@ if __name__ == "__main__":
             record_scan(student["id"], rfid, "OUT")
 
     # Export report for current month
-    now = datetime.now()
+    now = ph_now()
     filepath = export_monthly_report(now.year, now.month, output_folder="./reports")
     print(f"\nOpen this file to see the report:\n  {os.path.abspath(filepath)}")

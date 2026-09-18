@@ -35,7 +35,8 @@ from database import (
     determine_scan_type, get_today_stats, get_all_students,
     add_student, update_student, delete_student,
     get_logs_for_report, get_today_logs, get_setting,
-    save_setting, get_all_settings, import_students_from_list
+    save_setting, get_all_settings, import_students_from_list,
+    ph_now
 )
 from notifier import send_notification
 from reports import export_monthly_report
@@ -119,7 +120,7 @@ def api_scan():
         })
 
     scan_type = determine_scan_type(student["id"])
-    scan_time = datetime.now().strftime("%H:%M:%S")
+    scan_time = ph_now().strftime("%H:%M:%S")
     log_id    = record_scan(student["id"], code, scan_type)
 
     # Send notification in background so page responds instantly
@@ -139,8 +140,8 @@ def api_scan():
         "name":       student["full_name"],
         "section":    student["section"],
         "scan_type":  scan_type,
-        "scan_time":  datetime.now().strftime("%I:%M %p"),
-        "scan_date":  datetime.now().strftime("%B %d, %Y"),
+        "scan_time":  ph_now().strftime("%I:%M %p"),
+        "scan_date":  ph_now().strftime("%B %d, %Y"),
         "photo_url":  photo_url,
         "rfid_code":  code,
     })
@@ -176,7 +177,7 @@ def admin():
     return render_template("admin.html",
                            stats=stats, logs=logs,
                            school_name=school_name,
-                           today=datetime.now().strftime("%A, %B %d, %Y"))
+                           today=ph_now().strftime("%A, %B %d, %Y"))
 
 
 # ── STUDENTS ──────────────────────────────────────────────────────────────────
@@ -384,15 +385,15 @@ def reports():
     return render_template("reports.html",
                            school_name=school_name,
                            sections=sections,
-                           current_month=datetime.now().month,
-                           current_year=datetime.now().year)
+                           current_month=ph_now().month,
+                           current_year=ph_now().year)
 
 
 @app.route("/reports/export")
 def reports_export():
     """Generate and download the Excel report — filtered by section or grade."""
-    month       = int(request.args.get("month", datetime.now().month))
-    year        = int(request.args.get("year",  datetime.now().year))
+    month       = int(request.args.get("month", ph_now().month))
+    year        = int(request.args.get("year",  ph_now().year))
     section     = request.args.get("section",     "").strip() or None
     grade_level = request.args.get("grade_level", "").strip() or None
 

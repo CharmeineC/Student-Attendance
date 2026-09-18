@@ -16,6 +16,28 @@ import re
 import psycopg2
 import psycopg2.extras
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
+
+PH_TZ = ZoneInfo("Asia/Manila")
+
+
+def ph_now():
+    """
+    Current time in Philippine local time (UTC+8) — used everywhere
+    instead of bare datetime.now(), because this app may run on a
+    server (like Railway) whose system clock is UTC, not Philippine
+    time. Every recorded scan time, report default, and scheduled
+    check needs to reflect actual Philippine time regardless of what
+    timezone the underlying server happens to be set to.
+
+    Returns a naive datetime (no tzinfo attached) whose values already
+    correctly reflect Philippine wall-clock time — a drop-in
+    replacement for datetime.now() everywhere it was previously used,
+    since the rest of this codebase works with naive datetimes and
+    plain date/time strings throughout.
+    """
+    return datetime.now(PH_TZ).replace(tzinfo=None)
+
 
 DATABASE_URL = os.environ.get(
     "DATABASE_URL",
@@ -362,7 +384,7 @@ def import_students_from_list(students_list):
 # ── ATTENDANCE ────────────────────────────────────────────────────────────────
 
 def record_scan(student_id, rfid_code, scan_type, notify_channel=""):
-    now       = datetime.now()
+    now       = ph_now()
     scan_time = now.strftime("%H:%M:%S")
     scan_date = now.strftime("%Y-%m-%d")
     conn      = get_connection()
@@ -378,7 +400,7 @@ def record_scan(student_id, rfid_code, scan_type, notify_channel=""):
 
 
 def get_last_scan_today(student_id):
-    today = datetime.now().strftime("%Y-%m-%d")
+    today = ph_now().strftime("%Y-%m-%d")
     conn  = get_connection()
     row   = conn.execute("""
         SELECT * FROM attendance_logs
@@ -431,7 +453,7 @@ def mark_notified(log_id, channel):
 
 
 def get_today_logs(limit=50):
-    today = datetime.now().strftime("%Y-%m-%d")
+    today = ph_now().strftime("%Y-%m-%d")
     conn  = get_connection()
     rows  = conn.execute("""
         SELECT a.*, s.full_name, s.section, s.photo
@@ -446,7 +468,7 @@ def get_today_logs(limit=50):
 
 
 def get_today_stats():
-    today = datetime.now().strftime("%Y-%m-%d")
+    today = ph_now().strftime("%Y-%m-%d")
     conn  = get_connection()
     total_students = conn.execute(
         "SELECT COUNT(*) as c FROM students"
@@ -610,8 +632,8 @@ def claim_next_sms_job(worker_id, stale_minutes=2):
     Returns the claimed job row, or None if nothing is pending.
     """
     conn = get_connection()
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    stale_cutoff = (datetime.now() - timedelta(minutes=stale_minutes)).strftime("%Y-%m-%d %H:%M:%S")
+    now = ph_now().strftime("%Y-%m-%d %H:%M:%S")
+    stale_cutoff = (ph_now() - timedelta(minutes=stale_minutes)).strftime("%Y-%m-%d %H:%M:%S")
 
     # Requeue stale claims first
     conn.execute("""
@@ -649,7 +671,7 @@ def claim_next_sms_job(worker_id, stale_minutes=2):
 def mark_sms_job_complete(job_id, success, error=None):
     """Called by a worker after it actually attempted to send a claimed job."""
     conn = get_connection()
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    now = ph_now().strftime("%Y-%m-%d %H:%M:%S")
     status = 'sent' if success else 'failed'
     conn.execute("""
         UPDATE sms_queue SET status=?, completed_at=?, error_message=?
@@ -668,7 +690,7 @@ def cancel_sms_job(job_id):
     False if it wasn't pending (already claimed/sent/failed/cancelled).
     """
     conn = get_connection()
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    now = ph_now().strftime("%Y-%m-%d %H:%M:%S")
     cursor = conn.execute("""
         UPDATE sms_queue SET status='cancelled', completed_at=?
         WHERE id=? AND status='pending'
@@ -686,7 +708,7 @@ def cancel_all_pending_sms_jobs():
     picking them up. Returns how many were cancelled.
     """
     conn = get_connection()
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    now = ph_now().strftime("%Y-%m-%d %H:%M:%S")
     cursor = conn.execute("""
         UPDATE sms_queue SET status='cancelled', completed_at=?
         WHERE status='pending'
