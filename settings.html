@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Settings — {{ school_name }}</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  :root{--bg:#f5f6fa;--surface:#fff;--card:#fff;--border:#e0e4ef;--green:#00b87a;--blue:#2563eb;--amber:#d97706;--red:#dc2626;--text:#1a1d2e;--muted:#6b7280;--shadow:0 2px 12px rgba(0,0,0,0.07)}
+  body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;min-height:100vh}
+  .topbar{background:var(--surface);border-bottom:2px solid var(--border);padding:12px 24px;display:flex;align-items:center;justify-content:space-between;box-shadow:var(--shadow)}
+  .page-title{font-size:16px;font-weight:700}
+  .nav-links{display:flex;gap:6px}
+  .nav-link{padding:6px 12px;border-radius:6px;font-size:12px;font-weight:500;color:var(--muted);text-decoration:none;border:1px solid transparent;transition:all .15s}
+  .nav-link:hover,.nav-link.active{color:var(--text);background:var(--bg);border-color:var(--border)}
+  .content{padding:24px;display:grid;grid-template-columns:1fr 1fr;gap:20px;max-width:1000px}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:24px;box-shadow:var(--shadow)}
+  .card-title{font-size:14px;font-weight:700;margin-bottom:6px}
+  .card-desc{font-size:11px;color:var(--muted);margin-bottom:18px;line-height:1.6}
+  .form-row{margin-bottom:14px}
+  .form-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px;display:block}
+  .form-input,.form-select,.form-textarea{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--text);font-size:13px;outline:none;font-family:'Inter',sans-serif}
+  .form-input:focus,.form-textarea:focus{border-color:var(--blue)}
+  .form-textarea{resize:vertical;min-height:80px;line-height:1.6}
+  .toggle-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid #f3f4f6}
+  .toggle-row:last-of-type{border-bottom:none}
+  .toggle-info .toggle-name{font-size:13px;font-weight:500}
+  .toggle-info .toggle-desc{font-size:11px;color:var(--muted);margin-top:2px}
+  .toggle{position:relative;width:38px;height:22px;flex-shrink:0}
+  .toggle input{opacity:0;width:0;height:0}
+  .track{position:absolute;inset:0;background:#d1d5db;border-radius:22px;cursor:pointer;transition:background .2s}
+  .track::after{content:'';position:absolute;width:16px;height:16px;left:3px;top:3px;background:#fff;border-radius:50%;transition:transform .2s}
+  .toggle input:checked+.track{background:var(--green)}
+  .toggle input:checked+.track::after{transform:translateX(16px)}
+  .btn{padding:9px 18px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:none;font-family:'Inter',sans-serif;display:inline-flex;align-items:center;gap:6px;transition:all .15s;text-decoration:none}
+  .btn-blue{background:var(--blue);color:#fff}
+  .btn-blue:hover{background:#1d4ed8}
+  .btn-outline{background:transparent;color:var(--text);border:1px solid var(--border)}
+  .btn-outline:hover{border-color:var(--muted)}
+  .save-row{margin-top:18px;display:flex;align-items:center;gap:12px}
+  .hint{font-size:11px;color:var(--muted);margin-top:4px;line-height:1.5}
+  .detect-result{font-size:12px;margin-top:8px}
+  .full-width{grid-column:1/-1}
+  .banner-success{background:#ecfdf5;border:1px solid #6ee7b7;color:var(--green);padding:12px 16px;border-radius:8px;font-size:13px;grid-column:1/-1;font-weight:500}
+  .logo-preview{width:64px;height:64px;border-radius:10px;object-fit:cover;border:1px solid var(--border);margin-top:8px}
+  .logo-placeholder-box{width:64px;height:64px;border-radius:10px;background:#eff6ff;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:28px;margin-top:8px}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div class="page-title">⚙️ Settings</div>
+  <div class="nav-links">
+    <a href="/"         class="nav-link">📡 Scanner</a>
+    <a href="/admin"    class="nav-link">📊 Admin</a>
+    <a href="/students" class="nav-link">👥 Students</a>
+    <a href="/reports"  class="nav-link">📋 Reports</a>
+    <a href="/blast"       class="nav-link">📣 Blast</a>
+    
+    <a href="/settings" class="nav-link active">⚙️ Settings</a>
+  </div>
+</div>
+<div class="content">
+
+  {% if request.args.get('saved') %}
+  <div class="banner-success">✅ Settings saved successfully!</div>
+  {% endif %}
+
+  <form method="POST" action="/settings/save" style="display:contents">
+
+  <!-- School info -->
+  <div class="card">
+    <div class="card-title">🏫 School info</div>
+    <div class="card-desc">Basic information shown on the scanner page and reports.</div>
+    <div class="form-row">
+      <label class="form-label">School name</label>
+      <input class="form-input" name="school_name" value="{{ settings.get('school_name','') }}"/>
+    </div>
+    <div class="form-row">
+      <label class="form-label">Admin name</label>
+      <input class="form-input" name="admin_name" value="{{ settings.get('admin_name','') }}"/>
+    </div>
+    <div class="save-row">
+      <button type="submit" class="btn btn-blue">💾 Save settings</button>
+    </div>
+  </div>
+
+  <!-- Announcement ticker -->
+  <div class="card">
+    <div class="card-title">📢 Announcement ticker</div>
+    <div class="card-desc">This scrolls across the bottom of the scanner page. Update it any time for upcoming events, reminders, or news. Leave blank to hide it.</div>
+    <div class="form-row">
+      <label class="form-label">Announcement text</label>
+      <textarea class="form-textarea" name="announcement" placeholder="e.g. 📅 Nutrition Month celebration on July 15 | 📚 Enrollment for SY 2026-2027 is now open | 🎓 Graduation ceremony on March 28">{{ settings.get('announcement','') }}</textarea>
+      <div class="hint">Tip: use | to separate multiple announcements in one line.</div>
+    </div>
+    <div class="save-row">
+      <button type="submit" class="btn btn-blue">💾 Save announcement</button>
+    </div>
+  </div>
+
+  </form>
+
+  <!-- Holiday Mode -->
+  <div class="card">
+    <div class="card-title">🏖️ Holiday Mode</div>
+    <div class="card-desc">When there's no school for a while (break, holiday, or extended suspension), turn this on to send ONE clear announcement to every parent (Messenger, with SMS as fallback) — instead of leaving them wondering why attendance updates stopped, or getting repeated automatic reminder pings.</div>
+
+    <div class="toggle-row">
+      <div class="toggle-info">
+        <div class="toggle-name">Current status</div>
+        <div class="toggle-desc" id="holiday-status-desc">Checking...</div>
+      </div>
+    </div>
+
+    <div class="form-row" style="margin-top:10px">
+      <label class="form-label">Resume date (optional)</label>
+      <input class="form-input" type="date" id="holiday-until-date"/>
+      <div class="hint">If set, Holiday Mode automatically turns itself off the day after this date — no need to remember to turn it back on manually.</div>
+    </div>
+
+    <div class="form-row">
+      <label class="form-label">Custom message (optional)</label>
+      <textarea class="form-textarea" id="holiday-custom-message" placeholder="Leave blank to use the default message, or write your own (e.g. specific dates or reason for the break)"></textarea>
+    </div>
+
+    <div class="save-row">
+      <button type="button" class="btn btn-blue" onclick="turnOnHolidayMode()">📢 Turn ON &amp; announce to all parents</button>
+      <button type="button" class="btn btn-outline" onclick="turnOffHolidayMode()">Turn OFF</button>
+    </div>
+    <div id="holiday-mode-result" style="font-size:12px;margin-top:8px"></div>
+  </div>
+
+  <!-- School logo upload (separate form) -->
+  <div class="card">
+    <div class="card-title">🖼️ School logo</div>
+    <div class="card-desc">Shows in the top left corner of the scanner page. Recommended size: square image, at least 200x200px.</div>
+    {% if settings.get('school_logo') %}
+      <img src="/static/uploads/{{ settings.get('school_logo') }}" class="logo-preview" alt="School logo"/>
+    {% else %}
+      <div class="logo-placeholder-box">🏫</div>
+    {% endif %}
+    <form method="POST" action="/settings/upload_logo" enctype="multipart/form-data" style="margin-top:12px">
+      <div class="form-row">
+        <label class="form-label">Upload logo (JPG or PNG)</label>
+        <input class="form-input" type="file" name="logo" accept="image/*" required/>
+      </div>
+      <button type="submit" class="btn btn-blue">⬆ Upload logo</button>
+    </form>
+  </div>
+
+  <!-- Notification channels -->
+  <div class="card">
+    <div class="card-title">🔔 Notification channels</div>
+    <div class="card-desc">Choose which channels to use when notifying parents after each scan.</div>
+    <form method="POST" action="/settings/save">
+    {% for key, label, desc in [
+      ('use_messenger',     'Facebook Messenger', 'Primary — free, uses school WiFi'),
+      ('use_sms',           'SMS via SIM800C',    'Fallback — uses Globe SIM mobile signal'),
+      ('sms_fallback_only', 'SMS fallback only',  'Only send SMS if Messenger fails'),
+    ] %}
+    <div class="toggle-row">
+      <div class="toggle-info">
+        <div class="toggle-name">{{ label }}</div>
+        <div class="toggle-desc">{{ desc }}</div>
+      </div>
+      <label class="toggle">
+        <input type="checkbox" name="{{ key }}" value="1" {% if settings.get(key,'1')=='1' %}checked{% endif %}/>
+        <span class="track"></span>
+      </label>
+    </div>
+    {% endfor %}
+    <div class="save-row"><button type="submit" class="btn btn-blue">💾 Save</button></div>
+    </form>
+  </div>
+
+  <!-- SIM800C -->
+  <div class="card">
+    <div class="card-title">✉️ SIM800C SMS Setup</div>
+    <div class="card-desc">The SIM800C module connects via USB and shows as a COM port (e.g. COM3). Leave blank to auto-detect, or enter it manually and save.</div>
+    <form method="POST" action="/settings/save">
+    <div class="form-row">
+      <label class="form-label">COM Port</label>
+      <input class="form-input" name="sim800c_port" id="com-port-input" value="{{ settings.get('sim800c_port','') }}" placeholder="e.g. COM3"/>
+      <div class="hint">Leave blank to auto-detect each time. If auto-detect fails, check Device Manager → Ports to find the correct COM number.</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <button type="button" class="btn btn-outline" onclick="detectPort()">🔍 Auto-detect COM Port</button>
+      <button type="submit" class="btn btn-blue">💾 Save</button>
+    </div>
+    <div class="detect-result" id="detect-result"></div>
+    </form>
+
+    <!-- Multi-SIM candidate ports (for host running multiple SIM800C modules) -->
+    <form method="POST" action="/settings/save" style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
+    <div class="form-row">
+      <label class="form-label">Multi-SIM: ports to check at startup (optional)</label>
+      <input class="form-input" name="sim800c_candidate_ports" value="{{ settings.get('sim800c_candidate_ports','') }}" placeholder="e.g. COM8,COM9,COM10"/>
+      <div class="hint">If this PC has MULTIPLE SIM800C modules plugged in, list their known COM ports here (comma-separated) so startup only tests those — faster and safer than scanning every serial port. Leave blank to scan everything automatically.</div>
+    </div>
+    <div class="save-row">
+      <button type="submit" class="btn btn-blue">💾 Save</button>
+    </div>
+    </form>
+
+    <!-- Test SMS -->
+    <div style="border-top:1px solid var(--border);margin-top:16px;padding-top:16px;">
+      <div style="font-size:13px;font-weight:600;margin-bottom:10px;">📱 Test SMS</div>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <input type="text" id="test-sms-number" placeholder="e.g. 09171234567"
+          style="flex:1;min-width:160px;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;"/>
+        <input type="text" id="test-sms-port" placeholder="Port (blank = auto)"
+          style="width:150px;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;"/>
+        <button type="button" class="btn btn-green" onclick="sendTestSMS()">📤 Send Test SMS</button>
+      </div>
+      <div class="hint">On a multi-SIM host, type a specific port (e.g. COM8) to test that exact SIM's signal/registration — leave blank to auto-detect one.</div>
+      <div id="test-sms-result" style="font-size:12px;margin-top:8px;"></div>
+    </div>
+  </div>
+
+  <!-- Messenger -->
+  <div class="card">
+    <div class="card-title">💬 Facebook Messenger</div>
+    <div class="card-desc">Get token at developers.facebook.com → Your App → Messenger → Page Access Token. Parents must message your school Facebook Page once to opt in.</div>
+    <form method="POST" action="/settings/save">
+    <div class="form-row">
+      <label class="form-label">Facebook Page ID</label>
+      <input class="form-input" name="messenger_page_id" value="{{ settings.get('messenger_page_id','') }}" placeholder="e.g. 1215288958329940"/>
+      <div class="hint">Found under your Facebook Page → About → Page ID. Needed for QR sticker generation.</div>
+    </div>
+    <div class="form-row">
+      <label class="form-label">Page Access Token</label>
+      <input class="form-input" type="password" name="messenger_token" value="{{ settings.get('messenger_token','') }}" placeholder="Paste token here"/>
+    </div>
+    <div class="form-row">
+      <label class="form-label">Webhook Verify Token</label>
+      <input class="form-input" name="webhook_verify_token" value="{{ settings.get('webhook_verify_token','rfid_school_verify') }}"/>
+      <div class="hint">You will paste this into Facebook's webhook setup. Keep it as is unless you want to change it.</div>
+    </div>
+    <div class="save-row"><button type="submit" class="btn btn-blue">💾 Save</button></div>
+    </form>
+    <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
+      <div class="form-label" style="margin-bottom:8px">WEBHOOK SETUP</div>
+      <div style="font-size:12px;color:var(--muted);line-height:1.9">
+        Your webhook URL is (this updates automatically to match wherever this app is actually running):<br/>
+        <div style="display:flex;align-items:center;gap:8px;margin:4px 0">
+          <code id="live-webhook-url" style="background:var(--bg);padding:4px 8px;border-radius:4px;font-size:12px;color:var(--blue);flex:1;word-break:break-all">{{ live_webhook_url }}</code>
+          <button type="button" class="btn btn-outline" style="padding:4px 10px;font-size:11px" onclick="copyWebhookUrl()">📋 Copy</button>
+        </div>
+        <span id="copy-confirm" style="color:var(--green);font-size:11px;display:none">✅ Copied!</span><br/>
+        Verify token: <code style="background:var(--bg);padding:4px 8px;border-radius:4px;font-size:12px;color:var(--blue)">{{ settings.get('webhook_verify_token','rfid_school_verify') }}</code><br/><br/>
+        Paste the URL above into Facebook's webhook Callback URL field — see: <a href="/webhook_guide" style="color:var(--blue)">Webhook Setup Guide</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Messenger bot tools -->
+  <div class="card">
+    <div class="card-title">🤖 Messenger Bot Tools</div>
+    <div class="card-desc">Manage your Messenger bot's menu and buttons.</div>
+    <div style="padding-top:4px">
+      <div class="form-label" style="margin-bottom:8px">MESSENGER MENU SETUP</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.7">
+        Click below to set up the Get Started button and menu in your Facebook Page Messenger.
+        Parents will see Link, Unlink, and Help buttons when they open the chat.
+      </div>
+      <button type="button" class="btn btn-blue" onclick="setupMessengerProfile()">⚙️ Setup Messenger Menu</button>
+      <button type="button" class="btn btn-blue" onclick="subscribePageWebhook()" style="margin-left:8px">🔔 Subscribe Page Webhook</button>
+      <button type="button" class="btn btn-outline" onclick="deleteMessengerMenu()" style="margin-left:8px">🗑️ Remove ☰ Menu</button>
+      <div id="messenger-profile-result" style="font-size:12px;margin-top:8px"></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+function sendTestSMS() {
+  const num    = document.getElementById('test-sms-number').value.trim();
+  const port   = document.getElementById('test-sms-port').value.trim();
+  const result = document.getElementById('test-sms-result');
+  if (!num) { result.textContent = 'Please enter a phone number.'; result.style.color='#dc2626'; return; }
+  result.textContent = 'Sending...'; result.style.color = '#d97706';
+  fetch('/api/test_sms', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({phone: num, port: port || null})
+  }).then(r=>r.json()).then(data => {
+    result.textContent = data.message;
+    result.style.color = data.success ? '#00b87a' : '#dc2626';
+  }).catch(() => { result.textContent='Error. Is the server running?'; result.style.color='#dc2626'; });
+}
+
+function detectPort() {
+  const result = document.getElementById('detect-result');
+  result.textContent = 'Scanning...'; result.style.color = '#d97706';
+  fetch('/api/detect_com_port').then(r=>r.json()).then(data => {
+    if (data.found) {
+      document.getElementById('com-port-input').value = data.port;
+      result.textContent = `✅ Found SIM800C on ${data.port}!`;
+      result.style.color = '#00b87a';
+    } else {
+      const avail = data.available ? data.available.join(', ') : 'none';
+      result.textContent = `Not found. Available: ${avail}. Try entering manually.`;
+      result.style.color = '#dc2626';
+    }
+  }).catch(() => { result.textContent='Error scanning.'; result.style.color='#dc2626'; });
+}
+
+function setupMessengerProfile() {
+  const result = document.getElementById('messenger-profile-result');
+  result.textContent = 'Setting up...'; result.style.color = '#d97706';
+  fetch('/api/setup_messenger_profile', { method: 'POST' })
+    .then(r => r.json())
+    .then(data => {
+      result.textContent = data.success ? '✅ ' + data.message : '❌ ' + data.message;
+      result.style.color = data.success ? '#00b87a' : '#dc2626';
+    })
+    .catch(() => { result.textContent = 'Error. Check token is saved.'; result.style.color = '#dc2626'; });
+}
+
+function deleteMessengerMenu() {
+  const result = document.getElementById('messenger-profile-result');
+  result.textContent = 'Removing menu...'; result.style.color = '#d97706';
+  fetch('/api/delete_messenger_menu', { method: 'POST' })
+    .then(r => r.json())
+    .then(data => {
+      result.textContent = data.message;
+      result.style.color = data.success ? '#00b87a' : '#dc2626';
+    })
+    .catch(() => { result.textContent = 'Error.'; result.style.color = '#dc2626'; });
+}
+
+function subscribePageWebhook() {
+  const result = document.getElementById('messenger-profile-result');
+  result.textContent = 'Subscribing...'; result.style.color = '#d97706';
+  fetch('/api/subscribe_page_webhook', { method: 'POST' })
+    .then(r => r.json())
+    .then(data => {
+      result.textContent = data.success ? '✅ ' + data.message : '❌ ' + data.message;
+      result.style.color = data.success ? '#00b87a' : '#dc2626';
+    })
+    .catch(() => { result.textContent = 'Error. Check token is saved.'; result.style.color = '#dc2626'; });
+}
+
+function refreshHolidayStatus() {
+  fetch('/api/holiday_mode').then(r=>r.json()).then(data => {
+    const desc = document.getElementById('holiday-status-desc');
+    if (data.active) {
+      desc.textContent = data.until
+        ? `🟢 ACTIVE — auto-resumes after ${data.until}`
+        : '🟢 ACTIVE — no resume date set';
+      desc.style.color = '#00b87a';
+    } else {
+      desc.textContent = '⚪ Inactive — normal automatic keep-alive is running';
+      desc.style.color = '#6b7280';
+    }
+  }).catch(() => {
+    document.getElementById('holiday-status-desc').textContent = 'Could not check status.';
+  });
+}
+
+function turnOnHolidayMode() {
+  const until   = document.getElementById('holiday-until-date').value;
+  const message = document.getElementById('holiday-custom-message').value.trim();
+  const result  = document.getElementById('holiday-mode-result');
+  result.textContent = 'Sending announcement to all parents...';
+  result.style.color = '#d97706';
+  fetch('/api/holiday_mode', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({active: true, until: until || null, message: message || null})
+  }).then(r=>r.json()).then(data => {
+    if (data.success) {
+      let msg = `✅ Holiday Mode ON — reached ${data.announcement_sent} parent(s)`;
+      if (data.announcement_failed) msg += `, ${data.announcement_failed} unreachable`;
+      result.textContent = msg + '.';
+      result.style.color = '#00b87a';
+    } else {
+      result.textContent = '❌ Something went wrong.';
+      result.style.color = '#dc2626';
+    }
+    refreshHolidayStatus();
+  }).catch(() => { result.textContent = 'Error. Is the server running?'; result.style.color = '#dc2626'; });
+}
+
+function turnOffHolidayMode() {
+  const result = document.getElementById('holiday-mode-result');
+  result.textContent = 'Turning off...'; result.style.color = '#d97706';
+  fetch('/api/holiday_mode', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({active: false})
+  }).then(r=>r.json()).then(() => {
+    result.textContent = '✅ Holiday Mode OFF — automatic keep-alive resumed.';
+    result.style.color = '#00b87a';
+    refreshHolidayStatus();
+  }).catch(() => { result.textContent = 'Error.'; result.style.color = '#dc2626'; });
+}
+
+refreshHolidayStatus();
+
+function copyWebhookUrl() {
+  const text = document.getElementById('live-webhook-url').textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    const confirm = document.getElementById('copy-confirm');
+    confirm.style.display = 'inline';
+    setTimeout(() => { confirm.style.display = 'none'; }, 2000);
+  });
+}
+</script>
+</body>
+</html>

@@ -421,9 +421,14 @@ def reports_export():
 def settings():
     all_settings = get_all_settings()
     school_name  = get_setting("school_name") or "School"
+    # Computed from the actual incoming request, so this is always correct —
+    # whatever the current public address is (Railway, ngrok, anything else),
+    # not a hardcoded placeholder that goes stale.
+    live_webhook_url = request.host_url.rstrip("/") + "/webhook"
     return render_template("settings.html",
                            settings=all_settings,
-                           school_name=school_name)
+                           school_name=school_name,
+                           live_webhook_url=live_webhook_url)
 
 
 @app.route("/settings/save", methods=["POST"])
