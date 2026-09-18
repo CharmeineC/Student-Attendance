@@ -241,10 +241,14 @@
     <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
       <div class="form-label" style="margin-bottom:8px">WEBHOOK SETUP</div>
       <div style="font-size:12px;color:var(--muted);line-height:1.9">
-        Your webhook URL is:<br/>
-        <code style="background:var(--bg);padding:4px 8px;border-radius:4px;font-size:12px;color:var(--blue)">[your ngrok URL]/webhook</code><br/><br/>
+        Your webhook URL is (this updates automatically to match wherever this app is actually running):<br/>
+        <div style="display:flex;align-items:center;gap:8px;margin:4px 0">
+          <code id="live-webhook-url" style="background:var(--bg);padding:4px 8px;border-radius:4px;font-size:12px;color:var(--blue);flex:1;word-break:break-all">{{ live_webhook_url }}</code>
+          <button type="button" class="btn btn-outline" style="padding:4px 10px;font-size:11px" onclick="copyWebhookUrl()">📋 Copy</button>
+        </div>
+        <span id="copy-confirm" style="color:var(--green);font-size:11px;display:none">✅ Copied!</span><br/>
         Verify token: <code style="background:var(--bg);padding:4px 8px;border-radius:4px;font-size:12px;color:var(--blue)">{{ settings.get('webhook_verify_token','rfid_school_verify') }}</code><br/><br/>
-        See setup instructions at: <a href="/webhook_guide" style="color:var(--blue)">Webhook Setup Guide</a>
+        Paste the URL above into Facebook's webhook Callback URL field — see: <a href="/webhook_guide" style="color:var(--blue)">Webhook Setup Guide</a>
       </div>
     </div>
   </div>
@@ -393,6 +397,15 @@ function turnOffHolidayMode() {
 }
 
 refreshHolidayStatus();
+
+function copyWebhookUrl() {
+  const text = document.getElementById('live-webhook-url').textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    const confirm = document.getElementById('copy-confirm');
+    confirm.style.display = 'inline';
+    setTimeout(() => { confirm.style.display = 'none'; }, 2000);
+  });
+}
 </script>
 </body>
 </html>
