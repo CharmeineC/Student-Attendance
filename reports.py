@@ -18,7 +18,41 @@ from openpyxl.utils import get_column_letter
 from datetime import datetime, date
 import os
 
-from database import get_logs_for_report, get_setting, ph_now
+from database import get_logs_for_report, get_setting, ph_now, get_students_for_blast, get_all_sections
+from datetime import timedelta
+
+
+def _school_weekdays(start_date, end_date):
+    """
+    List of school-day dates (Mon–Fri) between start_date and end_date,
+    inclusive, as date objects. Doesn't know about holidays/breaks —
+    just excludes weekends, since there's no school calendar built into
+    this system to check against.
+    """
+    start = datetime.strptime(start_date, "%Y-%m-%d").date()
+    end   = datetime.strptime(end_date, "%Y-%m-%d").date()
+    days  = []
+    current = start
+    while current <= end:
+        if current.weekday() < 5:  # Monday=0 ... Friday=4
+            days.append(current)
+        current += timedelta(days=1)
+    return days
+
+
+def _get_students_for_report(section=None, grade_level=None):
+    """Same section/grade_level filtering logic used for the logs, but
+    returns ALL matching students regardless of whether they ever
+    scanned — this is what lets an absent student actually show up in
+    the per-student summary, instead of just being invisible."""
+    if grade_level and not section:
+        grade_sections = [s for s in get_all_sections()
+                          if s.split("-")[0].strip() == grade_level or s.strip() == grade_level]
+        students = []
+        for gs in grade_sections:
+            students.extend(get_students_for_blast(gs))
+        return students
+    return get_students_for_blast(section)
 
 
 def export_monthly_report(year, month, section=None, output_folder=".", grade_level=None):
@@ -281,6 +315,110 @@ def export_monthly_report(year, month, section=None, output_folder=".", grade_le
         ws2.column_dimensions[get_column_letter(col_num)].width = width
 
     ws2.freeze_panes = "A5"
+
+    # ── Sheet 3: Per-Student Daily Summary ──────────────────────────────
+    # The comprehensive teacher-facing view: EVERY student (not just those
+    # who scanned) as a row, one column per school day, marking whether
+    # each student had any scan that day at all. This is what actually
+    # surfaces absences — a student with zero scans all month previously
+    # never appeared anywhere in the report; here they show up as an
+    # unbroken row of "A" instead of being silently missing.
+    ws3 = wb.create_sheet("Per-Student Daily Summary")
+
+    all_students = _get_students_for_report(section, grade_level)
+    school_days  = _school_weekdays(start_date, end_date)
+
+    # Build a fast lookup: which (student_id, date) pairs actually have
+    # at least one scan, from the same logs already pulled for this report.
+    present_lookup = set()
+    for log in logs:
+        present_lookup.add((log["student_id"], log["scan_date"]))
+
+    COLOR_PRESENT_BG = "E8F5E9"  # light green
+    COLOR_ABSENT_BG  = "FFEBEE"  # light red/pink
+    COLOR_PRESENT_TXT = "2E7D32"
+    COLOR_ABSENT_TXT  = "C62828"
+
+    title3 = f"{school_name} — Per-Student Daily Summary ({month_name})"
+    last_col_letter = get_column_letter(4 + len(school_days) + 2)
+    ws3.merge_cells(f"A1:{last_col_letter}1")
+    ws3["A1"] = title3
+    ws3["A1"].font = Font(bold=True, size=13)
+    ws3.merge_cells(f"A2:{last_col_letter}2")
+    ws3["A2"] = "P = present (at least one scan that day)   A = absent (no scan recorded)"
+    ws3["A2"].font = Font(italic=True, size=9, color="666666")
+
+    # Header row: No. | Student | Section | [one column per school day] | Days Present | Attendance %
+    header_row3 = 4
+    ws3.cell(row=header_row3, column=1, value="No.")
+    ws3.cell(row=header_row3, column=2, value="Student Name")
+    ws3.cell(row=header_row3, column=3, value="Section")
+    for i, day in enumerate(school_days):
+        col = 4 + i
+        cell = ws3.cell(row=header_row3, column=col, value=f"{day.month}/{day.day}")
+        cell.alignment = Alignment(text_rotation=90, horizontal="center", vertical="center")
+    summary_col1 = 4 + len(school_days)
+    summary_col2 = summary_col1 + 1
+    ws3.cell(row=header_row3, column=summary_col1, value="Days Present")
+    ws3.cell(row=header_row3, column=summary_col2, value="Attendance %")
+
+    for col_num in range(1, summary_col2 + 1):
+        cell = ws3.cell(row=header_row3, column=col_num)
+        cell.font      = header_font2
+        cell.fill      = header_fill2
+        cell.border    = full_border
+        if col_num <= 3 or col_num >= summary_col1:
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+    ws3.row_dimensions[header_row3].height = 40
+
+    # Sort students by section then name for a teacher-friendly grouping
+    sorted_students = sorted(all_students, key=lambda s: (s["section"] or "", s["full_name"]))
+
+    for row_idx, student in enumerate(sorted_students, start=1):
+        excel_row = header_row3 + row_idx
+        ws3.cell(row=excel_row, column=1, value=row_idx)
+        ws3.cell(row=excel_row, column=2, value=student["full_name"])
+        ws3.cell(row=excel_row, column=3, value=student["section"])
+
+        days_present = 0
+        for i, day in enumerate(school_days):
+            col = 4 + i
+            day_str = day.strftime("%Y-%m-%d")
+            is_present = (student["id"], day_str) in present_lookup
+            if is_present:
+                days_present += 1
+            cell = ws3.cell(row=excel_row, column=col, value="P" if is_present else "A")
+            cell.font      = Font(size=9, bold=True,
+                                  color=COLOR_PRESENT_TXT if is_present else COLOR_ABSENT_TXT)
+            cell.fill      = PatternFill("solid", fgColor=COLOR_PRESENT_BG if is_present else COLOR_ABSENT_BG)
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+            cell.border    = full_border
+
+        total_days = len(school_days)
+        pct = round((days_present / total_days) * 100, 1) if total_days else 0
+
+        for col_num, value in [(1, row_idx), (2, student["full_name"]), (3, student["section"]),
+                                (summary_col1, days_present), (summary_col2, f"{pct}%")]:
+            cell = ws3.cell(row=excel_row, column=col_num, value=value)
+            cell.border = full_border
+            cell.font   = Font(size=10, bold=(col_num >= summary_col1))
+            cell.alignment = Alignment(horizontal="center" if col_num != 2 else "left", vertical="center")
+
+    ws3.column_dimensions["A"].width = 6
+    ws3.column_dimensions["B"].width = 28
+    ws3.column_dimensions["C"].width = 22
+    for i in range(len(school_days)):
+        ws3.column_dimensions[get_column_letter(4 + i)].width = 4
+    ws3.column_dimensions[get_column_letter(summary_col1)].width = 13
+    ws3.column_dimensions[get_column_letter(summary_col2)].width = 13
+
+    ws3.freeze_panes = ws3.cell(row=header_row3 + 1, column=4).coordinate
+
+    # Overall summary line at the bottom
+    summary_row3 = header_row3 + len(sorted_students) + 2
+    ws3.merge_cells(f"A{summary_row3}:C{summary_row3}")
+    ws3[f"A{summary_row3}"] = f"Total students: {len(sorted_students)}   |   School days this period: {len(school_days)}"
+    ws3[f"A{summary_row3}"].font = Font(bold=True, size=10)
 
     # ── Save the file ──────────────────────────────────────────────────────
     os.makedirs(output_folder, exist_ok=True)
