@@ -395,14 +395,20 @@ function loadNotificationLog() {
       </tr></thead><tbody>`;
       data.logs.forEach(l => {
         let channelDisplay, channelColor;
+        const smsStatusLabel = {
+          pending: '⏳ pending', claimed: '🔄 claimed',
+          sent: '✅ sent', failed: '❌ failed', cancelled: '✕ cancelled'
+        };
         if (l.notify_channel === 'none') {
           channelDisplay = '❌ Not sent';
           channelColor = 'var(--red)';
         } else if (l.notify_detail && l.notify_channel.includes('sms')) {
-          channelDisplay = '📱 SMS (fallback)';
+          const statusTxt = l.sms_status ? ` (${smsStatusLabel[l.sms_status] || l.sms_status})` : '';
+          channelDisplay = `📱 SMS fallback${statusTxt}`;
           channelColor = 'var(--amber)';
         } else if (l.notify_channel.includes('sms')) {
-          channelDisplay = '📱 SMS';
+          const statusTxt = l.sms_status ? ` (${smsStatusLabel[l.sms_status] || l.sms_status})` : '';
+          channelDisplay = `📱 SMS${statusTxt}`;
           channelColor = 'var(--blue)';
         } else if (l.notify_channel.includes('messenger')) {
           channelDisplay = '💬 Messenger';
