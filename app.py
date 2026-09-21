@@ -71,6 +71,50 @@ def allowed_image(filename):
            filename.rsplit(".", 1)[1].lower() in ALLOWED_IMAGES
 
 
+def save_resized_photo(file_obj, save_path, max_dimension=900, jpeg_quality=85):
+    """
+    Resizes and compresses an uploaded photo before saving it. Sized for
+    the LARGEST actual display context in this app — the scanner
+    confirmation screen shows the photo at up to 70% of the viewport
+    height (see scanner.html's .confirm-photo, max-height:70vh), not
+    just the small 32-44px thumbnails used in list views. 900px keeps
+    that large confirmation view sharp on most screens, while still
+    being dramatically smaller than typical full camera-resolution
+    photos (which are often 3000-4000px+ for no visible benefit here).
+    """
+    try:
+        from PIL import Image
+        img = Image.open(file_obj)
+        img_format = img.format  # e.g. "JPEG", "PNG" — preserve as-is
+
+        # Only shrink if actually larger than the target — never upscale
+        # a smaller photo, which would just waste space pointlessly.
+        img.thumbnail((max_dimension, max_dimension), Image.LANCZOS)
+
+        save_kwargs = {}
+        if img_format == "JPEG":
+            # Flatten any transparency onto white first — JPEG has no
+            # alpha channel, and saving RGBA content as JPEG raises an
+            # error rather than just quietly dropping it.
+            if img.mode in ("RGBA", "P"):
+                img = img.convert("RGB")
+            save_kwargs = {"quality": jpeg_quality, "optimize": True}
+        elif img_format == "PNG":
+            save_kwargs = {"optimize": True}
+
+        img.save(save_path, format=img_format, **save_kwargs)
+    except Exception as e:
+        print(f"⚠️  Could not resize photo ({e}) — saving original instead.")
+        file_obj.seek(0)
+        if hasattr(file_obj, "save"):
+            # Werkzeug FileStorage object (from request.files)
+            file_obj.save(save_path)
+        else:
+            # Plain file handle (e.g. open(path, "rb"))
+            with open(save_path, "wb") as out:
+                out.write(file_obj.read())
+
+
 def get_local_ip():
     """Get this PC's local IP address for display."""
     try:
@@ -224,7 +268,7 @@ def student_add():
             filename = secure_filename(photo.filename)
             # Prepend timestamp to avoid name collisions
             filename = f"{int(datetime.now().timestamp())}_{filename}"
-            photo.save(os.path.join(app.config["UPLOAD_FOLDER"], filename))
+            save_resized_photo(photo, os.path.join(app.config["UPLOAD_FOLDER"], filename))
             photo_filename = filename
 
     add_student(
@@ -250,7 +294,7 @@ def student_edit(student_id):
         if photo and photo.filename and allowed_image(photo.filename):
             filename = secure_filename(photo.filename)
             filename = f"{int(datetime.now().timestamp())}_{filename}"
-            photo.save(os.path.join(app.config["UPLOAD_FOLDER"], filename))
+            save_resized_photo(photo, os.path.join(app.config["UPLOAD_FOLDER"], filename))
             photo_filename = filename
 
     update_student(
@@ -829,7 +873,9 @@ def api_bulk_photo_confirm():
         final_name = f"{int(datetime.now().timestamp() * 1000)}_{lrn}.{ext}"
         final_path = os.path.join(UPLOAD_FOLDER, final_name)
         try:
-            os.replace(tmp_path, final_path)
+            with open(tmp_path, "rb") as tmp_f:
+                save_resized_photo(tmp_f, final_path)
+            os.remove(tmp_path)
             update_student(
                 student_id=student["id"],
                 rfid_code=student["rfid_code"] or "",
@@ -1106,7 +1152,11 @@ def upload_logo():
     logo = request.files["logo"]
     if logo and logo.filename and allowed_image(logo.filename):
         filename = "school_logo_" + secure_filename(logo.filename)
-        logo.save(os.path.join(app.config["UPLOAD_FOLDER"], filename))
+        # Larger max size than student photos — the logo appears in
+        # bigger contexts (page headers, printed ID slips), and it's
+        # only ever one file, so storage/bandwidth savings don't matter
+        # here the way they do across ~2,000 student photos.
+        save_resized_photo(logo, os.path.join(app.config["UPLOAD_FOLDER"], filename), max_dimension=800)
         save_setting("school_logo", filename)
     return redirect(url_for("settings") + "?saved=1")
 
