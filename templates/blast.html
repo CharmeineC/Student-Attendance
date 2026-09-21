@@ -198,26 +198,50 @@
     {% endif %}
   </div>
 
-  <!-- SMS Queue Log -->
+  <!-- Notification Log (consolidated) -->
   <div class="card full-width">
-    <div class="card-title">📶 SMS Queue Log</div>
-    <div class="card-desc">Shows which SIM800C (port) actually handled each SMS, and its status — useful for spotting a specific SIM that keeps failing on a multi-SIM host.</div>
-    <div style="margin-bottom:10px;display:flex;gap:14px;align-items:center">
-      <button type="button" class="link-btn" onclick="loadSmsQueueLog()">🔄 Refresh</button>
-      <button type="button" class="link-btn" style="color:var(--red)" onclick="cancelAllPendingSms()">🛑 Cancel all pending</button>
-      <button type="button" class="link-btn" onclick="clearCancelledSms()">🧹 Clear cancelled</button>
-    </div>
-    <div class="scroll-log">
-      <div id="sms-queue-log">Loading...</div>
-    </div>
-  </div>
+    <div class="card-title">🔔 Notification Log</div>
+    <div class="card-desc">Every scan's notification — which channel actually delivered, whether it fell back from Messenger to SMS, and why, when nothing could be sent at all.</div>
 
-  <!-- Attendance Notification Log -->
-  <div class="card full-width">
-    <div class="card-title">🔔 Attendance Notification Log</div>
-    <div class="card-desc">Every scan's notification attempt — which channel actually delivered, whether it fell back from Messenger to SMS, and why, when nothing could be sent at all.</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:14px;padding:12px;background:var(--bg);border-radius:8px">
+      <div style="min-width:130px">
+        <label class="form-label" style="margin-bottom:4px">Grade</label>
+        <select class="form-select" id="filter-grade" onchange="onFilterGradeChange()" style="padding:7px 10px;font-size:12px">
+          <option value="">All grades</option>
+          {% set grades = [] %}
+          {% for sec in sections %}
+            {% set grade = sec.split('-')[0].strip() if '-' in sec else sec.strip() %}
+            {% if grade not in grades %}
+              {% set _ = grades.append(grade) %}
+              <option value="{{ grade }}">{{ grade }}</option>
+            {% endif %}
+          {% endfor %}
+        </select>
+      </div>
+      <div style="min-width:160px">
+        <label class="form-label" style="margin-bottom:4px">Section</label>
+        <select class="form-select" id="filter-section" onchange="loadNotificationLog()" style="padding:7px 10px;font-size:12px">
+          <option value="">All sections</option>
+          {% for sec in sections %}
+          <option value="{{ sec }}" data-grade="{{ sec.split('-')[0].strip() if '-' in sec else sec.strip() }}">{{ sec }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div style="min-width:130px">
+        <label class="form-label" style="margin-bottom:4px">From</label>
+        <input type="date" class="form-input" id="filter-start-date" onchange="loadNotificationLog()" style="padding:7px 10px;font-size:12px"/>
+      </div>
+      <div style="min-width:130px">
+        <label class="form-label" style="margin-bottom:4px">To</label>
+        <input type="date" class="form-input" id="filter-end-date" onchange="loadNotificationLog()" style="padding:7px 10px;font-size:12px"/>
+      </div>
+      <button type="button" class="link-btn" onclick="clearNotificationFilters()">✕ Clear filters</button>
+    </div>
+
     <div style="margin-bottom:10px;display:flex;gap:14px;align-items:center">
       <button type="button" class="link-btn" onclick="loadNotificationLog()">🔄 Refresh</button>
+      <button type="button" class="link-btn" style="color:var(--red)" onclick="cancelAllPendingSms()">🛑 Cancel all pending SMS</button>
+      <button type="button" class="link-btn" onclick="clearCancelledSms()">🧹 Clear cancelled SMS</button>
     </div>
     <div class="scroll-log">
       <div id="notification-log">Loading...</div>
@@ -345,53 +369,21 @@ function closeRecipientModal() {
   document.getElementById('recipient-modal').classList.remove('open');
 }
 
-function loadSmsQueueLog() {
-  const container = document.getElementById('sms-queue-log');
-  container.innerHTML = 'Loading...';
-  fetch('/api/sms_queue/recent')
-    .then(r => r.json())
-    .then(data => {
-      if (!data.jobs || data.jobs.length === 0) {
-        container.innerHTML = '<p style="color:var(--muted);font-size:13px;padding:10px 0;text-align:center">No SMS jobs yet.</p>';
-        return;
-      }
-      const statusColor = { sent: 'var(--green)', failed: 'var(--red)', pending: '#d97706', claimed: 'var(--blue)', cancelled: 'var(--muted)' };
-      let html = `<table><thead><tr>
-        <th>Time</th><th>Phone</th><th>Message</th><th>Sent Via</th><th>Status</th><th>Error</th><th></th>
-      </tr></thead><tbody>`;
-      data.jobs.forEach(j => {
-        const color = statusColor[j.status] || 'var(--muted)';
-        const cancelBtn = j.status === 'pending'
-          ? `<button class="link-btn" style="color:var(--red)" onclick="cancelOneSms(${j.id})">Cancel</button>`
-          : '';
-        html += `<tr>
-          <td style="font-size:11px;color:var(--muted);font-family:monospace">${j.created_at}</td>
-          <td style="font-size:12px">${j.phone_number}</td>
-          <td style="font-size:12px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${j.message}</td>
-          <td style="font-size:12px;font-weight:600">${j.sent_via || '—'}</td>
-          <td><span style="color:${color};font-weight:700;font-size:12px">${j.status}</span></td>
-          <td style="font-size:11px;color:var(--red)">${j.error_message || ''}</td>
-          <td>${cancelBtn}</td>
-        </tr>`;
-      });
-      html += '</tbody></table>';
-      container.innerHTML = html;
-    })
-    .catch(() => { container.innerHTML = '<p style="color:var(--red);font-size:13px">Error loading queue log.</p>'; });
-}
-
-function cancelOneSms(jobId) {
-  if (!confirm('Cancel this queued SMS?')) return;
-  fetch(`/api/sms_queue/cancel/${jobId}`, { method: 'POST' })
-    .then(r => r.json())
-    .then(() => loadSmsQueueLog())
-    .catch(() => alert('Error cancelling.'));
-}
-
 function loadNotificationLog() {
   const container = document.getElementById('notification-log');
   container.innerHTML = 'Loading...';
-  fetch('/api/notification_log')
+
+  const params = new URLSearchParams();
+  const grade = document.getElementById('filter-grade').value;
+  const section = document.getElementById('filter-section').value;
+  const startDate = document.getElementById('filter-start-date').value;
+  const endDate = document.getElementById('filter-end-date').value;
+  if (section) params.set('section', section);
+  else if (grade) params.set('grade_level', grade);
+  if (startDate) params.set('start_date', startDate);
+  if (endDate) params.set('end_date', endDate);
+
+  fetch('/api/notification_log?' + params.toString())
     .then(r => r.json())
     .then(data => {
       if (!data.logs || data.logs.length === 0) {
@@ -438,13 +430,33 @@ function loadNotificationLog() {
     .catch(() => { container.innerHTML = '<p style="color:var(--red);font-size:13px">Error loading notification log.</p>'; });
 }
 
+function onFilterGradeChange() {
+  const grade = document.getElementById('filter-grade').value;
+  const sectionSel = document.getElementById('filter-section');
+  sectionSel.value = '';
+  sectionSel.querySelectorAll('option').forEach(opt => {
+    if (opt.value === '') { opt.style.display = ''; return; }
+    opt.style.display = (!grade || opt.dataset.grade === grade) ? '' : 'none';
+  });
+  loadNotificationLog();
+}
+
+function clearNotificationFilters() {
+  document.getElementById('filter-grade').value = '';
+  document.getElementById('filter-section').value = '';
+  document.getElementById('filter-section').querySelectorAll('option').forEach(opt => opt.style.display = '');
+  document.getElementById('filter-start-date').value = '';
+  document.getElementById('filter-end-date').value = '';
+  loadNotificationLog();
+}
+
 function cancelAllPendingSms() {
   if (!confirm('Cancel ALL pending SMS jobs? This cannot be undone.')) return;
   fetch('/api/sms_queue/cancel_all_pending', { method: 'POST' })
     .then(r => r.json())
     .then(data => {
       alert(data.message || 'Done.');
-      loadSmsQueueLog();
+      loadNotificationLog();
     })
     .catch(() => alert('Error cancelling.'));
 }
@@ -455,12 +467,11 @@ function clearCancelledSms() {
     .then(r => r.json())
     .then(data => {
       alert(data.message || 'Done.');
-      loadSmsQueueLog();
+      loadNotificationLog();
     })
     .catch(() => alert('Error clearing.'));
 }
 
-loadSmsQueueLog();
 loadNotificationLog();
 </script>
 </body>
