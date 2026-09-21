@@ -1076,6 +1076,33 @@ def blast():
                            sections=sections)
 
 
+@app.route("/api/notification_log")
+def api_notification_log():
+    """
+    Recent scan-triggered notification attempts (not bulk blasts) —
+    which channel actually delivered, or fell back to, and why, when
+    something didn't go as expected. Powers the "Attendance Notification
+    Log" panel on the Blast page.
+    """
+    from database import get_recent_notification_log
+    logs = get_recent_notification_log(limit=100)
+    return jsonify({
+        "logs": [
+            {
+                "full_name":     l["full_name"],
+                "section":       l["section"],
+                "scan_type":     l["scan_type"],
+                "scan_date":     l["scan_date"],
+                "scan_time":     l["scan_time"],
+                "notify_channel": l["notify_channel"],
+                "notify_detail":  l["notify_detail"],
+                "notified":       l["notified"],
+            }
+            for l in logs
+        ]
+    })
+
+
 @app.route("/blast/send", methods=["POST"])
 def blast_send():
     """Start a blast — runs in background thread, returns blast_id."""

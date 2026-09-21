@@ -22,6 +22,10 @@ def send_notification(student, log_id, scan_type, scan_time):
     """
     Smart notification — sends to all linked channels simultaneously.
     SMS only fires if NO Messenger is linked.
+
+    Always records the outcome (via mark_notified), including complete
+    failures — so the Blast page's notification log can show exactly
+    what happened for every scan, not just the ones that succeeded.
     """
     school_name   = get_setting("school_name") or "School"
     message       = build_message(student["full_name"], scan_type, scan_time, school_name)
@@ -30,6 +34,8 @@ def send_notification(student, log_id, scan_type, scan_time):
 
     sent_digital = False
     channels_used = []
+    messenger_errors = []   # per-parent failure reasons, if any
+    had_messenger_link = False
 
     # ── Messenger — parent 1 and 2 simultaneously ─────────────────────────
     if use_messenger:
@@ -37,13 +43,18 @@ def send_notification(student, log_id, scan_type, scan_time):
         results = []
 
         def send_msg(mid, label):
-            if send_messenger(mid, message):
+            success, error = send_messenger(mid, message)
+            if success:
                 results.append(label)
+            else:
+                messenger_errors.append(error)
 
         if student.get("messenger_id"):
+            had_messenger_link = True
             t = threading.Thread(target=send_msg, args=(student["messenger_id"], "messenger"))
             threads.append(t)
         if student.get("messenger_id_2"):
+            had_messenger_link = True
             t = threading.Thread(target=send_msg, args=(student["messenger_id_2"], "messenger_2"))
             threads.append(t)
 
@@ -63,16 +74,45 @@ def send_notification(student, log_id, scan_type, scan_time):
     # Queued rather than sent directly, so volume can be picked up and split
     # across multiple PCs' SIM800C modules instead of one SIM handling
     # everything (which is what triggers telco fair-use throttling).
+    sms_attempted = False
+    sms_skip_reason = None
     if use_sms and not sent_digital and student.get("parent_phone"):
+        sms_attempted = True
         if queue_sms(student["parent_phone"], message):
             channels_used.append("sms_queued")
             print(f"  ✉️  SMS queued for parent of {student['full_name']}")
+        else:
+            sms_skip_reason = "Failed to queue SMS (see server log)."
+    elif not sent_digital:
+        if not use_sms:
+            sms_skip_reason = "SMS is disabled in Settings."
+        elif not student.get("parent_phone"):
+            sms_skip_reason = "No parent phone number on file."
+
+    # ── Build a clear, human-readable detail message for the admin ────────
+    detail = None
+    if messenger_errors and sent_digital:
+        # At least one parent succeeded, but not all — worth flagging
+        # even though it's not a total failure.
+        detail = f"Partial Messenger failure ({len(messenger_errors)} parent/s): {'; '.join(messenger_errors)}"
+    elif messenger_errors and not sent_digital:
+        reason = f"Messenger failed: {'; '.join(messenger_errors)}"
+        if "sms_queued" in channels_used:
+            detail = f"{reason} — sent via SMS instead."
+        elif sms_skip_reason:
+            detail = f"{reason} SMS also unavailable: {sms_skip_reason}"
+        else:
+            detail = reason
+    elif not had_messenger_link and not sent_digital and sms_skip_reason:
+        detail = f"No Messenger linked. SMS unavailable: {sms_skip_reason}"
+    elif not sent_digital and not channels_used and sms_skip_reason:
+        detail = sms_skip_reason
 
     channel = ",".join(channels_used) if channels_used else "none"
-    if channels_used:
-        mark_notified(log_id, channel)
-    else:
-        print(f"  ⚠️  No channel available for {student['full_name']}")
+    mark_notified(log_id, channel, detail)
+    if not channels_used:
+        print(f"  ⚠️  No channel available for {student['full_name']}" +
+              (f" — {detail}" if detail else ""))
 
     return channel
 
@@ -106,7 +146,8 @@ def send_blast_to_parent(student, message, blast_id=None, channels=None):
         threads = []
         results = []
         def send_msg(mid, label):
-            if send_messenger(mid, message):
+            success, error = send_messenger(mid, message)
+            if success:
                 results.append(label)
 
         if student.get("messenger_id"):
@@ -155,11 +196,17 @@ def send_messenger(recipient_id, message_text, with_quick_reply=True):
     messaging window for the next notification. This is a workaround while
     pages_utility_messaging is pending App Review — it is not a guarantee,
     since it depends on the parent actually tapping the button.
+
+    Returns (success: bool, error_detail: str or None) — the detail is
+    what actually gets shown to the admin (e.g. on the Blast page's
+    notification log) when a send fails, instead of only ever being
+    visible in the server's own console output.
     """
     token = get_setting("messenger_token")
     if not token:
-        print("  ❌ Messenger: No Page Access Token configured in Settings.")
-        return False
+        detail = "No Page Access Token configured in Settings."
+        print(f"  ❌ Messenger: {detail}")
+        return False, detail
     try:
         message_obj = {"text": message_text}
         if with_quick_reply:
@@ -172,13 +219,23 @@ def send_messenger(recipient_id, message_text, with_quick_reply=True):
             params={"access_token": token}, timeout=10
         )
         if r.status_code == 200:
-            return True
+            return True, None
         else:
-            print(f"  ❌ Messenger failed (HTTP {r.status_code}): {r.text[:300]}")
-            return False
+            # Pull Facebook's own error message out of the response when
+            # available — this is what actually tells us WHY it failed
+            # (e.g. "message window has expired" vs a permissions issue),
+            # not just that it did.
+            try:
+                fb_error = r.json().get("error", {}).get("message", r.text[:200])
+            except Exception:
+                fb_error = r.text[:200]
+            detail = f"Messenger error (HTTP {r.status_code}): {fb_error}"
+            print(f"  ❌ {detail}")
+            return False, detail
     except Exception as e:
-        print(f"  ❌ Messenger error: {e}")
-        return False
+        detail = f"Messenger error: {e}"
+        print(f"  ❌ {detail}")
+        return False, detail
 
 
 def send_inactivity_keepalive(is_final_ping=False):
@@ -217,7 +274,8 @@ def send_inactivity_keepalive(is_final_ping=False):
             mid = student.get(field)
             if mid and mid not in seen_ids:
                 seen_ids.add(mid)
-                if send_messenger(mid, text, with_quick_reply=True):
+                success, _ = send_messenger(mid, text, with_quick_reply=True)
+                if success:
                     sent += 1
                 else:
                     failed += 1

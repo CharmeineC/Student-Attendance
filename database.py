@@ -170,9 +170,11 @@ def setup_database():
             scan_date      TEXT    NOT NULL,
             notified       INTEGER DEFAULT 0,
             notify_channel TEXT,
+            notify_detail  TEXT,
             FOREIGN KEY (student_id) REFERENCES students(id)
         )
     """)
+    conn.execute("ALTER TABLE attendance_logs ADD COLUMN IF NOT EXISTS notify_detail TEXT")
 
     conn.execute("""
         CREATE TABLE IF NOT EXISTS blast_logs (
@@ -442,11 +444,28 @@ def determine_scan_type(student_id):
     return "OUT" if last["scan_type"] == "IN" else "IN"
 
 
-def mark_notified(log_id, channel):
+def mark_notified(log_id, channel, detail=None):
+    """
+    Records how a scan's notification actually went. Called for EVERY
+    attempted notification, including complete failures — not just
+    successful ones — so a genuinely failed notification is visible in
+    the log with a reason, instead of silently never being recorded at
+    all (which is what happened before this existed).
+
+    channel: the channel(s) that succeeded, comma-joined (e.g.
+        "messenger" or "sms_queued"), or exactly "none" if nothing
+        worked. The `notified` flag is derived from this automatically
+        — 1 if any channel succeeded, 0 if channel == "none".
+    detail: optional human-readable explanation, shown to the admin on
+        the Blast page's notification log — e.g. "Messenger failed:
+        window expired — sent via SMS instead", or the specific reason
+        nothing could be sent at all.
+    """
     conn = get_connection()
+    notified_flag = 0 if channel == "none" else 1
     conn.execute(
-        "UPDATE attendance_logs SET notified=1, notify_channel=? WHERE id=?",
-        (channel, log_id)
+        "UPDATE attendance_logs SET notified=?, notify_channel=?, notify_detail=? WHERE id=?",
+        (notified_flag, channel, detail, log_id)
     )
     conn.commit()
     conn.close()
@@ -463,6 +482,29 @@ def get_today_logs(limit=50):
         ORDER BY a.scan_time DESC
         LIMIT ?
     """, (today, limit)).fetchall()
+    conn.close()
+    return rows
+
+
+def get_recent_notification_log(limit=100):
+    """
+    Recent scan-triggered notification attempts, most recent first —
+    which channel actually delivered (or fell back to), and why, when
+    something didn't go as expected. Includes complete failures too
+    (notify_channel = "none"), not just successes — otherwise a scan
+    whose notification failed entirely would never show up here at all.
+    Separate from the Blast page's own blast history, since this
+    covers every individual scan's notification, not bulk blasts.
+    """
+    conn = get_connection()
+    rows = conn.execute("""
+        SELECT a.*, s.full_name, s.section
+        FROM attendance_logs a
+        JOIN students s ON a.student_id = s.id
+        WHERE a.notify_channel IS NOT NULL
+        ORDER BY a.scan_date DESC, a.scan_time DESC
+        LIMIT ?
+    """, (limit,)).fetchall()
     conn.close()
     return rows
 
