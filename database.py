@@ -219,9 +219,15 @@ def setup_database():
             completed_at  TEXT,
             error_message TEXT,
             attempts      INTEGER DEFAULT 0,
+            message_ref      INTEGER,
+            delivery_status  TEXT,
+            delivery_checked_at TEXT,
             created_at    TEXT    DEFAULT to_char(now(), 'YYYY-MM-DD HH24:MI:SS')
         )
     """)
+    conn.execute("ALTER TABLE sms_queue ADD COLUMN IF NOT EXISTS message_ref INTEGER")
+    conn.execute("ALTER TABLE sms_queue ADD COLUMN IF NOT EXISTS delivery_status TEXT")
+    conn.execute("ALTER TABLE sms_queue ADD COLUMN IF NOT EXISTS delivery_checked_at TEXT")
 
     conn.execute("""
         CREATE TABLE IF NOT EXISTS settings (
@@ -742,15 +748,25 @@ def claim_next_sms_job(worker_id, stale_minutes=2):
     return claimed  # None if another worker won the race
 
 
-def mark_sms_job_complete(job_id, success, error=None):
-    """Called by a worker after it actually attempted to send a claimed job."""
+def mark_sms_job_complete(job_id, success, error=None, message_ref=None):
+    """
+    Called by a worker after it actually attempted to send a claimed job.
+
+    message_ref is the modem's own reference number for this specific
+    SMS (captured from the +CMGS response) — stored so a LATER,
+    asynchronous delivery report (if the delivery-report listener is
+    running) can be matched back to this exact job. On its own, storing
+    this does not yet confirm real delivery — 'sent' here still only
+    means the modem successfully handed the message to the network, not
+    that Globe actually delivered it to the phone.
+    """
     conn = get_connection()
     now = ph_now().strftime("%Y-%m-%d %H:%M:%S")
     status = 'sent' if success else 'failed'
     conn.execute("""
-        UPDATE sms_queue SET status=?, completed_at=?, error_message=?
+        UPDATE sms_queue SET status=?, completed_at=?, error_message=?, message_ref=?
         WHERE id=?
-    """, (status, now, error, job_id))
+    """, (status, now, error, message_ref, job_id))
     conn.commit()
     conn.close()
 

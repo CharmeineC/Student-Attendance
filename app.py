@@ -653,16 +653,20 @@ def api_sms_queue_complete():
     """
     Called by a worker after it actually attempted to send a claimed job,
     reporting back whether it succeeded.
-    Body (JSON): {"job_id": int, "worker_id": str, "success": bool, "error": str|null}
+    Body (JSON): {"job_id": int, "worker_id": str, "success": bool,
+                  "error": str|null, "message_ref": int|null}
+    message_ref is the modem's reference number for this SMS, needed to
+    later match an asynchronous delivery report back to this exact job.
     """
     from database import mark_sms_job_complete
     data = request.get_json() or {}
     job_id = data.get("job_id")
     success = bool(data.get("success"))
     error = data.get("error")
+    message_ref = data.get("message_ref")
     if job_id is None:
         return jsonify({"success": False, "message": "job_id required"}), 400
-    mark_sms_job_complete(job_id, success, error)
+    mark_sms_job_complete(job_id, success, error, message_ref=message_ref)
     return jsonify({"success": True})
 
 

@@ -630,7 +630,7 @@ def queue_sms(phone_number, message):
         return False, None
 
 
-def start_sms_queue_worker(poll_seconds=5, min_pace_seconds=5, max_pace_seconds=30):
+def start_sms_queue_worker(poll_seconds=5, min_pace_seconds=3, max_pace_seconds=15):
     """
     Runs ON THE HOST, in the background — one independent worker thread
     per SIM800C module actually detected on this PC, exactly like a
@@ -672,12 +672,13 @@ def start_sms_queue_worker(poll_seconds=5, min_pace_seconds=5, max_pace_seconds=
             try:
                 job = claim_next_sms_job(worker_id)
                 if job:
-                    success = send_sms_sim800c(
+                    success, message_ref = send_sms_sim800c(
                         job["phone_number"], job["message"], port=pinned_port
                     )
                     mark_sms_job_complete(
                         job["id"], success,
-                        error=None if success else "send failed (see server log)"
+                        error=None if success else "send failed (see server log)",
+                        message_ref=message_ref
                     )
                     pace = random.uniform(min_pace_seconds, max_pace_seconds)
                     time.sleep(pace)
@@ -805,12 +806,22 @@ def send_sms_sim800c(phone_number, message_text, port=None):
         device instead of all of them racing to auto-detect and
         potentially colliding on the same port. If omitted, falls back
         to the original single-device auto-detect behavior.
+
+    Returns (success: bool, message_ref: int or None). message_ref is
+    the modem's own reference number for this specific SMS (from the
+    +CMGS response) — this is what a LATER delivery report (+CDS),
+    if one arrives, uses to identify which message it's actually
+    confirming. Capturing it now is what makes matching a future
+    delivery report back to this exact message possible at all; on
+    its own it doesn't yet confirm real delivery — that requires the
+    separate delivery-report listener (a bigger, hardware-dependent
+    piece, not part of this function).
     """
     if not port:
         port = find_sim800c_port()
     if not port:
         print("  ❌ SIM800C not found. Check USB connection and port in Settings.")
-        return False
+        return False, None
 
     number = _format_phone_number(phone_number)
     print(f"  📱 Sending SMS to {number} via {port}...")
@@ -848,13 +859,13 @@ def send_sms_sim800c(phone_number, message_text, port=None):
             time.sleep(1)
         if not at_ok:
             print("  ❌ SIM800C not responding to AT command (after 3 attempts).")
-            return False
+            return False, None
 
         # Check network registration
         resp = send_at("AT+CREG?", wait=1)
         if ",1" not in resp and ",5" not in resp:
             print("  ❌ SIM not registered on network. Check SIM card.")
-            return False
+            return False, None
 
         # Check signal quality
         resp = send_at("AT+CSQ", wait=0.5)
@@ -866,11 +877,21 @@ def send_sms_sim800c(phone_number, message_text, port=None):
         # Set character set to GSM for best compatibility
         send_at('AT+CSCS="GSM"', wait=0.5)
 
+        # Request a delivery (status) report from the network for this
+        # message — 49 sets the Status Report Request bit on top of the
+        # standard first-octet value (17), 167 is a ~4-day relative
+        # validity period. This is a widely-documented setting for the
+        # SIM800 series, but whether Globe (or your specific SIM/plan)
+        # actually honors it can only be confirmed by real-world testing
+        # — some networks silently ignore the request rather than
+        # erroring, so its absence wouldn't necessarily show up here.
+        send_at("AT+CSMP=49,167,0,0", wait=0.5)
+
         # Send SMS
         resp = send_at(f'AT+CMGS="{number}"', wait=2)
         if ">" not in resp:
             print(f"  ❌ No prompt from modem: {resp.strip()!r}")
-            return False
+            return False, None
 
         # Write message body + Ctrl-Z to send
         ser.write((message_text + chr(26)).encode("utf-8", errors="replace"))
@@ -891,18 +912,28 @@ def send_sms_sim800c(phone_number, message_text, port=None):
                 break
 
         if "+CMGS:" in resp:
-            print("  ✅ SMS sent successfully!")
-            return True
+            # Pull the message reference number out of "+CMGS: <mr>" —
+            # needed to later match a delivery report back to this exact
+            # message, since the report only identifies messages by this
+            # number (which is small, 0-255, and reused/wraps over time).
+            message_ref = None
+            try:
+                ref_part = resp.split("+CMGS:")[1].strip()
+                message_ref = int(ref_part.split()[0].strip())
+            except (IndexError, ValueError):
+                pass
+            print(f"  ✅ SMS sent successfully! (ref: {message_ref})")
+            return True, message_ref
         elif "ERROR" in resp:
             print(f"  ❌ SMS failed with error: {resp.strip()}")
-            return False
+            return False, None
         else:
             print(f"  ⚠️  Unclear SMS result after {waited}s: {resp.strip()!r}")
-            return False
+            return False, None
 
     except Exception as e:
         print(f"  ❌ SMS error: {e}")
-        return False
+        return False, None
 
     finally:
         # Always close, then give Windows/the CH340 driver a moment to
@@ -944,7 +975,7 @@ def test_sms(phone_number, port=None):
     msg    = f"TEST: CES RFID Attendance System is working. - {school}"
     label  = f" via {port}" if port else ""
     print(f"\n📱 Sending test SMS to {number}{label}...")
-    result = send_sms_sim800c(phone_number, msg, port=port)
+    result, _ = send_sms_sim800c(phone_number, msg, port=port)
     if result:
         print("✅ Test SMS sent!")
         return True, f"✅ Test SMS sent to {number}{label}!"
