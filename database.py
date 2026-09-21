@@ -171,10 +171,12 @@ def setup_database():
             notified       INTEGER DEFAULT 0,
             notify_channel TEXT,
             notify_detail  TEXT,
+            sms_job_id     INTEGER,
             FOREIGN KEY (student_id) REFERENCES students(id)
         )
     """)
     conn.execute("ALTER TABLE attendance_logs ADD COLUMN IF NOT EXISTS notify_detail TEXT")
+    conn.execute("ALTER TABLE attendance_logs ADD COLUMN IF NOT EXISTS sms_job_id INTEGER")
 
     conn.execute("""
         CREATE TABLE IF NOT EXISTS blast_logs (
@@ -444,28 +446,21 @@ def determine_scan_type(student_id):
     return "OUT" if last["scan_type"] == "IN" else "IN"
 
 
-def mark_notified(log_id, channel, detail=None):
+def mark_notified(log_id, channel, detail=None, sms_job_id=None):
     """
     Records how a scan's notification actually went. Called for EVERY
-    attempted notification, including complete failures — not just
-    successful ones — so a genuinely failed notification is visible in
-    the log with a reason, instead of silently never being recorded at
-    all (which is what happened before this existed).
+    attempted notification, including complete failures.
 
-    channel: the channel(s) that succeeded, comma-joined (e.g.
-        "messenger" or "sms_queued"), or exactly "none" if nothing
-        worked. The `notified` flag is derived from this automatically
-        — 1 if any channel succeeded, 0 if channel == "none".
-    detail: optional human-readable explanation, shown to the admin on
-        the Blast page's notification log — e.g. "Messenger failed:
-        window expired — sent via SMS instead", or the specific reason
-        nothing could be sent at all.
+    sms_job_id, when SMS was used, links back to the actual sms_queue
+    row — this is what lets the Blast page's notification log show the
+    SMS's LIVE status (pending/claimed/sent/failed), not just "we
+    decided to queue it" frozen at the moment the scan happened.
     """
     conn = get_connection()
     notified_flag = 0 if channel == "none" else 1
     conn.execute(
-        "UPDATE attendance_logs SET notified=?, notify_channel=?, notify_detail=? WHERE id=?",
-        (notified_flag, channel, detail, log_id)
+        "UPDATE attendance_logs SET notified=?, notify_channel=?, notify_detail=?, sms_job_id=? WHERE id=?",
+        (notified_flag, channel, detail, sms_job_id, log_id)
     )
     conn.commit()
     conn.close()
@@ -534,9 +529,10 @@ def get_recent_notification_log(limit=100, section=None, grade_level=None,
     params.append(limit)
 
     rows = conn.execute(f"""
-        SELECT a.*, s.full_name, s.section
+        SELECT a.*, s.full_name, s.section, q.status AS sms_status
         FROM attendance_logs a
         JOIN students s ON a.student_id = s.id
+        LEFT JOIN sms_queue q ON a.sms_job_id = q.id
         WHERE {where_sql}
         ORDER BY a.scan_date DESC, a.scan_time DESC
         LIMIT ?

@@ -1106,6 +1106,7 @@ def api_notification_log():
                 "notify_channel": l["notify_channel"],
                 "notify_detail":  l["notify_detail"],
                 "notified":       l["notified"],
+                "sms_status":     l["sms_status"],
             }
             for l in logs
         ]

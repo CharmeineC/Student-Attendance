@@ -9,13 +9,29 @@ Smart notification system:
 import requests
 import time
 import threading
+from datetime import datetime
 from database import get_setting, save_setting, mark_notified, ph_now
 
 
-def build_message(student_name, scan_type, scan_time, school_name):
+def build_message(student_name, scan_type, scan_time, school_name, scan_date=None):
+    """
+    scan_date, if given, should be "YYYY-MM-DD". Including the actual
+    date in the message itself (not just the time) matters because a
+    notification can genuinely arrive later than the moment it was
+    triggered — e.g. a Messenger fallback to SMS, or a delayed read —
+    so "arrived at 7:30 AM" alone could be ambiguous about which day
+    if read hours or days later.
+    """
     time_formatted = _format_time(scan_time)
     action = "has ARRIVED at school" if scan_type == "IN" else "has LEFT school"
-    return f"{student_name} {action} at {time_formatted}. - {school_name}"
+    date_part = ""
+    if scan_date:
+        try:
+            dt = datetime.strptime(scan_date, "%Y-%m-%d")
+            date_part = f" on {dt.strftime('%a')}, {dt.strftime('%b')} {dt.day}"
+        except ValueError:
+            pass
+    return f"{student_name} {action} at {time_formatted}{date_part}. - {school_name}"
 
 
 def send_notification(student, log_id, scan_type, scan_time):
@@ -28,7 +44,8 @@ def send_notification(student, log_id, scan_type, scan_time):
     what happened for every scan, not just the ones that succeeded.
     """
     school_name   = get_setting("school_name") or "School"
-    message       = build_message(student["full_name"], scan_type, scan_time, school_name)
+    scan_date     = ph_now().strftime("%Y-%m-%d")
+    message       = build_message(student["full_name"], scan_type, scan_time, school_name, scan_date=scan_date)
     use_messenger = get_setting("use_messenger") == "1"
     use_sms       = get_setting("use_sms")       == "1"
 
@@ -76,9 +93,19 @@ def send_notification(student, log_id, scan_type, scan_time):
     # everything (which is what triggers telco fair-use throttling).
     sms_attempted = False
     sms_skip_reason = None
+    queued_sms_job_id = None
     if use_sms and not sent_digital and student.get("parent_phone"):
         sms_attempted = True
-        if queue_sms(student["parent_phone"], message):
+        sms_message = message
+        # If Messenger failed specifically because the 24-hour window
+        # expired (not some other error), add a short reminder to the
+        # SMS itself — otherwise the parent has no way of knowing their
+        # Messenger notifications quietly stopped, and why.
+        window_expired = any("outside of allowed window" in (err or "") for err in messenger_errors)
+        if window_expired:
+            sms_message = message + " (Msg us on FB Messenger to keep getting instant updates there too.)"
+        sms_success, queued_sms_job_id = queue_sms(student["parent_phone"], sms_message)
+        if sms_success:
             channels_used.append("sms_queued")
             print(f"  ✉️  SMS queued for parent of {student['full_name']}")
         else:
@@ -109,7 +136,7 @@ def send_notification(student, log_id, scan_type, scan_time):
         detail = sms_skip_reason
 
     channel = ",".join(channels_used) if channels_used else "none"
-    mark_notified(log_id, channel, detail)
+    mark_notified(log_id, channel, detail, sms_job_id=queued_sms_job_id)
     if not channels_used:
         print(f"  ⚠️  No channel available for {student['full_name']}" +
               (f" — {detail}" if detail else ""))
@@ -165,7 +192,8 @@ def send_blast_to_parent(student, message, blast_id=None, channels=None):
     # SMS only if no digital AND sms is an allowed channel — queued so
     # volume can be split across multiple PCs' SIM800C modules.
     if allow_sms and not sent_digital and student.get("parent_phone"):
-        if queue_sms(student["parent_phone"], message):
+        sms_success, _ = queue_sms(student["parent_phone"], message)
+        if sms_success:
             channels_used.append("sms_queued")
 
     result_channel = ",".join(channels_used) if channels_used else "none"
@@ -587,18 +615,19 @@ def queue_sms(phone_number, message):
     SIM cards, which is what actually avoids telco fair-use throttling on
     a single SIM.
 
-    Returns True if the job was queued (essentially always, barring a
-    database error) — this does NOT mean the SMS was delivered yet, only
-    that it's waiting for a worker to send it. Check sms_queue (or
-    get_sms_queue_stats()) for real delivery status.
+    Returns (success: bool, job_id: int or None). success=True means
+    only that the job was queued — not that it's been sent yet. The
+    job_id is what lets a caller look up this specific job's LIVE
+    status (pending/claimed/sent/failed) later, e.g. for the Blast
+    page's notification log.
     """
     from database import queue_sms_job
     try:
-        queue_sms_job(phone_number, message)
-        return True
+        job_id = queue_sms_job(phone_number, message)
+        return True, job_id
     except Exception as e:
         print(f"  ❌ Could not queue SMS: {e}")
-        return False
+        return False, None
 
 
 def start_sms_queue_worker(poll_seconds=5, min_pace_seconds=5, max_pace_seconds=30):
