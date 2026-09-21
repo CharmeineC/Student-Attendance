@@ -1081,11 +1081,20 @@ def api_notification_log():
     """
     Recent scan-triggered notification attempts (not bulk blasts) —
     which channel actually delivered, or fell back to, and why, when
-    something didn't go as expected. Powers the "Attendance Notification
-    Log" panel on the Blast page.
+    something didn't go as expected. Powers the notification log panel
+    on the Blast page. Supports optional section/grade_level/date range
+    filtering via query params.
     """
     from database import get_recent_notification_log
-    logs = get_recent_notification_log(limit=100)
+    section     = request.args.get("section") or None
+    grade_level = request.args.get("grade_level") or None
+    start_date  = request.args.get("start_date") or None
+    end_date    = request.args.get("end_date") or None
+
+    logs = get_recent_notification_log(
+        limit=200, section=section, grade_level=grade_level,
+        start_date=start_date, end_date=end_date
+    )
     return jsonify({
         "logs": [
             {

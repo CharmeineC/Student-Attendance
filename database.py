@@ -486,25 +486,61 @@ def get_today_logs(limit=50):
     return rows
 
 
-def get_recent_notification_log(limit=100):
+def get_recent_notification_log(limit=100, section=None, grade_level=None,
+                                start_date=None, end_date=None):
     """
     Recent scan-triggered notification attempts, most recent first —
     which channel actually delivered (or fell back to), and why, when
     something didn't go as expected. Includes complete failures too
-    (notify_channel = "none"), not just successes — otherwise a scan
-    whose notification failed entirely would never show up here at all.
-    Separate from the Blast page's own blast history, since this
-    covers every individual scan's notification, not bulk blasts.
+    (notify_channel = "none"), not just successes.
+
+    Optional filters:
+      section     — exact section match (e.g. "Grade 1 - Rose")
+      grade_level — matches any section starting with this grade
+                    (e.g. "Grade 1" matches "Grade 1 - Rose", "Grade 1 - Camia")
+      start_date, end_date — "YYYY-MM-DD", inclusive range on scan_date
     """
     conn = get_connection()
-    rows = conn.execute("""
+
+    where_clauses = ["a.notify_channel IS NOT NULL"]
+    params = []
+
+    if section:
+        where_clauses.append("s.section = ?")
+        params.append(section)
+    elif grade_level:
+        # Exact grade-prefix matching (not a raw LIKE pattern), so
+        # "Grade 1" can never accidentally match a "Grade 10" section —
+        # same safe approach used for report filtering.
+        matching_sections = [s for s in get_all_sections()
+                             if s.split("-")[0].strip() == grade_level or s.strip() == grade_level]
+        if matching_sections:
+            placeholders = ",".join(["?"] * len(matching_sections))
+            where_clauses.append(f"s.section IN ({placeholders})")
+            params.extend(matching_sections)
+        else:
+            # No sections match this grade at all — return nothing rather
+            # than accidentally showing unfiltered results.
+            where_clauses.append("1=0")
+
+    if start_date:
+        where_clauses.append("a.scan_date >= ?")
+        params.append(start_date)
+    if end_date:
+        where_clauses.append("a.scan_date <= ?")
+        params.append(end_date)
+
+    where_sql = " AND ".join(where_clauses)
+    params.append(limit)
+
+    rows = conn.execute(f"""
         SELECT a.*, s.full_name, s.section
         FROM attendance_logs a
         JOIN students s ON a.student_id = s.id
-        WHERE a.notify_channel IS NOT NULL
+        WHERE {where_sql}
         ORDER BY a.scan_date DESC, a.scan_time DESC
         LIMIT ?
-    """, (limit,)).fetchall()
+    """, tuple(params)).fetchall()
     conn.close()
     return rows
 
