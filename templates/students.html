@@ -152,7 +152,7 @@
             data-status="{{ s.status or 'active' }}"
             class="{{ 'inactive' if (s.status or 'active') != 'active' else '' }}">
           <td>
-            {% if s.photo %}<img src="/static/uploads/{{ s.photo }}" class="student-photo"/>
+            {% if s.photo %}<img src="/static/uploads/{{ s.photo }}" class="student-photo" loading="lazy"/>
             {% else %}<div class="student-avatar">{{ s.full_name[0] }}</div>{% endif %}
           </td>
           <td><strong>{{ s.full_name }}</strong><br/><span style="font-size:10px;color:var(--muted)">{{ s.lrn or '' }}</span></td>

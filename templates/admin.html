@@ -68,7 +68,7 @@
         {% for log in logs %}
         <tr>
           <td>
-            {% if log.photo %}<img src="/static/uploads/{{ log.photo }}" class="photo"/>
+            {% if log.photo %}<img src="/static/uploads/{{ log.photo }}" class="photo" loading="lazy"/>
             {% else %}<div class="avatar">{{ log.full_name[0] }}</div>{% endif %}
           </td>
           <td><strong>{{ log.full_name }}</strong></td>
