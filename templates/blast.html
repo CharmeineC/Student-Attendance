@@ -212,6 +212,18 @@
     </div>
   </div>
 
+  <!-- Attendance Notification Log -->
+  <div class="card full-width">
+    <div class="card-title">🔔 Attendance Notification Log</div>
+    <div class="card-desc">Every scan's notification attempt — which channel actually delivered, whether it fell back from Messenger to SMS, and why, when nothing could be sent at all.</div>
+    <div style="margin-bottom:10px;display:flex;gap:14px;align-items:center">
+      <button type="button" class="link-btn" onclick="loadNotificationLog()">🔄 Refresh</button>
+    </div>
+    <div class="scroll-log">
+      <div id="notification-log">Loading...</div>
+    </div>
+  </div>
+
 </div>
 
 <!-- Recipient detail modal -->
@@ -376,6 +388,56 @@ function cancelOneSms(jobId) {
     .catch(() => alert('Error cancelling.'));
 }
 
+function loadNotificationLog() {
+  const container = document.getElementById('notification-log');
+  container.innerHTML = 'Loading...';
+  fetch('/api/notification_log')
+    .then(r => r.json())
+    .then(data => {
+      if (!data.logs || data.logs.length === 0) {
+        container.innerHTML = '<p style="color:var(--muted);font-size:13px;padding:10px 0;text-align:center">No notifications recorded yet.</p>';
+        return;
+      }
+      let html = `<table><thead><tr>
+        <th>Date</th><th>Time</th><th>Student</th><th>Section</th><th>Type</th><th>Channel</th><th>Detail</th>
+      </tr></thead><tbody>`;
+      data.logs.forEach(l => {
+        let channelDisplay, channelColor;
+        if (l.notify_channel === 'none') {
+          channelDisplay = '❌ Not sent';
+          channelColor = 'var(--red)';
+        } else if (l.notify_detail && l.notify_channel.includes('sms')) {
+          channelDisplay = '📱 SMS (fallback)';
+          channelColor = 'var(--amber)';
+        } else if (l.notify_channel.includes('sms')) {
+          channelDisplay = '📱 SMS';
+          channelColor = 'var(--blue)';
+        } else if (l.notify_channel.includes('messenger')) {
+          channelDisplay = '💬 Messenger';
+          channelColor = 'var(--green)';
+        } else {
+          channelDisplay = l.notify_channel;
+          channelColor = 'var(--muted)';
+        }
+        const detailCell = l.notify_detail
+          ? `<span style="font-size:11px;color:${l.notify_channel === 'none' ? 'var(--red)' : 'var(--amber)'}">${l.notify_detail}</span>`
+          : '<span style="font-size:11px;color:var(--muted)">—</span>';
+        html += `<tr>
+          <td style="font-size:11px;color:var(--muted)">${l.scan_date}</td>
+          <td style="font-size:11px;color:var(--muted);font-family:monospace">${l.scan_time}</td>
+          <td style="font-size:12px;font-weight:600">${l.full_name}</td>
+          <td style="font-size:11px;color:var(--muted)">${l.section || '—'}</td>
+          <td style="font-size:11px">${l.scan_type}</td>
+          <td><span style="color:${channelColor};font-weight:700;font-size:12px">${channelDisplay}</span></td>
+          <td style="max-width:280px">${detailCell}</td>
+        </tr>`;
+      });
+      html += '</tbody></table>';
+      container.innerHTML = html;
+    })
+    .catch(() => { container.innerHTML = '<p style="color:var(--red);font-size:13px">Error loading notification log.</p>'; });
+}
+
 function cancelAllPendingSms() {
   if (!confirm('Cancel ALL pending SMS jobs? This cannot be undone.')) return;
   fetch('/api/sms_queue/cancel_all_pending', { method: 'POST' })
@@ -399,6 +461,7 @@ function clearCancelledSms() {
 }
 
 loadSmsQueueLog();
+loadNotificationLog();
 </script>
 </body>
 </html>
