@@ -173,6 +173,26 @@
     </form>
   </div>
 
+  <!-- Keep-alive scheduler -->
+  <div class="card">
+    <div class="card-title">📅 Messenger Keep-Alive Pings</div>
+    <div class="card-desc">Automatically pings already-linked parents after a period of inactivity (weekday idle gaps, and a single Sunday evening ping) to keep their 24-hour Messenger window open. Turning this off does NOT affect actual scan notifications — only these extra keep-alive pings.</div>
+    <form method="POST" action="/settings/save" onsubmit="document.getElementById('keepalive-hidden').value = document.getElementById('keepalive-checkbox').checked ? '1' : '0'">
+      <input type="hidden" id="keepalive-hidden" name="keepalive_enabled" value="{{ settings.get('keepalive_enabled','1') }}"/>
+      <div class="toggle-row">
+        <div class="toggle-info">
+          <div class="toggle-name">Keep-alive pings</div>
+          <div class="toggle-desc">Turn off to pause temporarily — no code changes needed to turn it back on later.</div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="keepalive-checkbox" {% if settings.get('keepalive_enabled','1')=='1' %}checked{% endif %}/>
+          <span class="track"></span>
+        </label>
+      </div>
+      <div class="save-row"><button type="submit" class="btn btn-blue">💾 Save</button></div>
+    </form>
+  </div>
+
   <!-- SIM800C -->
   <div class="card">
     <div class="card-title">✉️ SIM800C SMS Setup</div>
