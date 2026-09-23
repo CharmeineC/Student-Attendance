@@ -123,8 +123,13 @@
       <textarea class="form-textarea" id="holiday-custom-message" placeholder="Leave blank to use the default message, or write your own (e.g. specific dates or reason for the break)"></textarea>
     </div>
 
+    <div class="form-row" style="display:flex;align-items:center;gap:8px">
+      <input type="checkbox" id="holiday-skip-announcement" style="width:auto"/>
+      <label for="holiday-skip-announcement" style="font-size:12px;color:var(--muted);cursor:pointer">Don't send an announcement — just pause keep-alive pings silently</label>
+    </div>
+
     <div class="save-row">
-      <button type="button" class="btn btn-blue" onclick="turnOnHolidayMode()">📢 Turn ON &amp; announce to all parents</button>
+      <button type="button" class="btn btn-blue" id="holiday-turn-on-btn" onclick="turnOnHolidayMode()">📢 Turn ON &amp; announce to all parents</button>
       <button type="button" class="btn btn-outline" onclick="turnOffHolidayMode()">Turn OFF</button>
     </div>
     <div id="holiday-mode-result" style="font-size:12px;margin-top:8px"></div>
@@ -378,21 +383,38 @@ function refreshHolidayStatus() {
   });
 }
 
+function updateHolidayButtonLabel() {
+  const skip = document.getElementById('holiday-skip-announcement').checked;
+  document.getElementById('holiday-turn-on-btn').textContent =
+    skip ? '🔕 Turn ON (no announcement)' : '📢 Turn ON & announce to all parents';
+}
+document.getElementById('holiday-skip-announcement').addEventListener('change', updateHolidayButtonLabel);
+
 function turnOnHolidayMode() {
   const until   = document.getElementById('holiday-until-date').value;
   const message = document.getElementById('holiday-custom-message').value.trim();
+  const skipAnnouncement = document.getElementById('holiday-skip-announcement').checked;
   const result  = document.getElementById('holiday-mode-result');
-  result.textContent = 'Sending announcement to all parents...';
+  result.textContent = skipAnnouncement ? 'Turning on...' : 'Sending announcement to all parents...';
   result.style.color = '#d97706';
   fetch('/api/holiday_mode', {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({active: true, until: until || null, message: message || null})
+    body: JSON.stringify({
+      active: true, until: until || null, message: message || null,
+      skip_announcement: skipAnnouncement
+    })
   }).then(r=>r.json()).then(data => {
     if (data.success) {
-      let msg = `✅ Holiday Mode ON — reached ${data.announcement_sent} parent(s)`;
-      if (data.announcement_failed) msg += `, ${data.announcement_failed} unreachable`;
-      result.textContent = msg + '.';
+      let msg;
+      if (data.announcement_skipped) {
+        msg = '✅ Holiday Mode ON — no announcement sent, keep-alive pings paused.';
+      } else {
+        msg = `✅ Holiday Mode ON — reached ${data.announcement_sent} parent(s)`;
+        if (data.announcement_failed) msg += `, ${data.announcement_failed} unreachable`;
+        msg += '.';
+      }
+      result.textContent = msg;
       result.style.color = '#00b87a';
     } else {
       result.textContent = '❌ Something went wrong.';
