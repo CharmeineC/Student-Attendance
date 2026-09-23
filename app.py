@@ -570,15 +570,18 @@ def api_holiday_mode_status():
 def api_holiday_mode_toggle():
     """
     Turn Holiday Mode on or off.
-    Turning ON immediately sends one explicit announcement to every linked
-    parent (Messenger, with SMS as fallback) — reusing the same logic as
-    the Blast feature — and pauses the automatic inactivity keep-alive
-    scheduler until turned back off.
+    Turning ON pauses the automatic inactivity keep-alive scheduler until
+    turned back off. By default it ALSO immediately sends one explicit
+    announcement to every linked parent (Messenger, with SMS as
+    fallback) — reusing the same logic as the Blast feature — but this
+    can be skipped entirely (skip_announcement: true) for cases where
+    only the internal keep-alive pause is wanted, without notifying
+    parents at all.
     Turning OFF just resumes normal automatic behavior; no message is sent.
 
     Body (JSON, optional):
         {"active": true/false, "message": "custom text",
-         "until": "YYYY-MM-DD"}
+         "until": "YYYY-MM-DD", "skip_announcement": true/false}
     "until" is optional — if provided, Holiday Mode auto-expires after
     that date even if nobody manually turns it back off.
     """
@@ -586,19 +589,23 @@ def api_holiday_mode_toggle():
     turning_on = data.get("active", True)
     custom_message = (data.get("message") or "").strip() or None
     until_date = (data.get("until") or "").strip() or None
+    skip_announcement = bool(data.get("skip_announcement", False))
 
     save_setting("holiday_mode", "1" if turning_on else "0")
     save_setting("holiday_mode_until", until_date if turning_on else "")
 
     result = {"success": True, "active": turning_on, "until": until_date}
     if turning_on:
-        try:
-            from notifier import send_holiday_announcement
-            sent, failed = send_holiday_announcement(custom_message, until_date)
-            result["announcement_sent"] = sent
-            result["announcement_failed"] = failed
-        except Exception as e:
-            result["announcement_error"] = str(e)
+        if skip_announcement:
+            result["announcement_skipped"] = True
+        else:
+            try:
+                from notifier import send_holiday_announcement
+                sent, failed = send_holiday_announcement(custom_message, until_date)
+                result["announcement_sent"] = sent
+                result["announcement_failed"] = failed
+            except Exception as e:
+                result["announcement_error"] = str(e)
     return jsonify(result)
 
 
@@ -1246,6 +1253,59 @@ def api_subscribe_page_webhook():
 
 # ── MESSENGER WEBHOOK ─────────────────────────────────────────────────────────
 
+def _link_one_lrn(rfid_code, sender_id, school_name):
+    """
+    Attempts to link one LRN to this Messenger sender. Extracted as its
+    own function so a message containing MULTIPLE LRNs (e.g. a parent
+    linking two children in one message) can call this once per LRN
+    found, collecting each result into one combined reply — rather than
+    only ever handling exactly one LRN per message.
+
+    Returns the reply text for this one LRN (not sent here — the
+    caller combines replies from all LRNs found in the message into a
+    single Messenger message).
+    """
+    from database import get_connection
+    student = get_student_by_lrn(rfid_code)
+
+    if not student:
+        print("Unknown RFID from Messenger: " + rfid_code)
+        return ("Sorry, we could not find a student with LRN: " + rfid_code + "\n"
+                "Please check the LRN on your child's ID card and try again.")
+
+    conn = get_connection()
+    existing1 = student["messenger_id"] or ""
+    existing2 = (student["messenger_id_2"] if "messenger_id_2" in student.keys() else "") or ""
+
+    if existing1 == sender_id or existing2 == sender_id:
+        reply = ("You are already linked to " + student["full_name"] +
+                 " (" + (student["section"] or "") + ").\n"
+                 "You will receive notifications when your child scans.")
+    elif not existing1:
+        conn.execute("UPDATE students SET messenger_id=? WHERE lrn=?",
+                    (sender_id, rfid_code))
+        conn.commit()
+        reply = ("You are now linked to " + student["full_name"] +
+                 " (" + (student["section"] or "") + ").\n"
+                 "You will receive a message every time your child "
+                 "arrives at or leaves " + school_name + ".")
+        print("Parent 1 linked to " + student["full_name"])
+    elif not existing2:
+        conn.execute("UPDATE students SET messenger_id_2=? WHERE lrn=?",
+                    (sender_id, rfid_code))
+        conn.commit()
+        reply = ("You are now linked to " + student["full_name"] +
+                 " (" + (student["section"] or "") + ").\n"
+                 "You will receive a message every time your child "
+                 "arrives at or leaves " + school_name + ".")
+        print("Parent 2 linked to " + student["full_name"])
+    else:
+        reply = (student["full_name"] + " already has 2 parents linked.\n"
+                 "Please contact the school to update this.")
+    conn.close()
+    return reply
+
+
 @app.route("/webhook", methods=["GET", "POST"])
 def webhook():
     """
@@ -1437,12 +1497,19 @@ def webhook():
             if cmd == "ACK_NOTIFICATION":
                 continue
 
-            # No command matched — check if text looks like an LRN
-            # LRN is a numeric code, typically 6-12 digits
-            rfid_code = text.upper().replace(" ", "")
-            looks_like_lrn = bool(re.match(r'^[0-9]{6,12}$', rfid_code)) if rfid_code else False
+            # No command matched — check if the message contains one or
+            # more LRNs. Parents often type things like "LRN: 129509260198"
+            # or send two children's LRNs in one message — the old check
+            # required the ENTIRE message to be nothing but digits, so
+            # either of those completely failed to match at all. This
+            # strips common "LRN" labels first, then finds every valid
+            # LRN-length number anywhere in the message, however many
+            # there are and whatever's between them (spaces, commas,
+            # "and", newlines, etc.).
+            cleaned = re.sub(r'LRN\s*[:#\-\.]?\s*(?:NO\.?)?\s*[:#\-\.]?\s*', '', text, flags=re.IGNORECASE)
+            found_lrns = re.findall(r'\b[0-9]{6,12}\b', cleaned)
 
-            if not rfid_code or not looks_like_lrn:
+            if not found_lrns:
                 # Not an RFID code — show quick reply buttons
                 send_messenger_buttons(sender_id,
                     "Hi! What would you like to do?",
@@ -1453,49 +1520,12 @@ def webhook():
                     ])
                 continue
 
-            student = get_student_by_lrn(rfid_code)
-
-            if student:
-                conn = get_connection()
-                existing1 = student["messenger_id"] or ""
-                existing2 = (student["messenger_id_2"] if "messenger_id_2" in student.keys() else "") or ""
-
-                if existing1 == sender_id or existing2 == sender_id:
-                    reply = ("You are already linked to " + student["full_name"] +
-                             " (" + (student["section"] or "") + ").\n\n"
-                             "You will receive notifications when your child scans.")
-                elif not existing1:
-                    conn.execute("UPDATE students SET messenger_id=? WHERE lrn=?",
-                                (sender_id, rfid_code))
-                    conn.commit()
-                    reply = ("You are now linked to " + student["full_name"] +
-                             " (" + (student["section"] or "") + ").\n\n"
-                             "You will receive a message every time your child "
-                             "arrives at or leaves " + school_name + ".")
-                    print("Parent 1 linked to " + student["full_name"])
-                elif not existing2:
-                    conn.execute("UPDATE students SET messenger_id_2=? WHERE lrn=?",
-                                (sender_id, rfid_code))
-                    conn.commit()
-                    reply = ("You are now linked to " + student["full_name"] +
-                             " (" + (student["section"] or "") + ").\n\n"
-                             "You will receive a message every time your child "
-                             "arrives at or leaves " + school_name + ".")
-                    print("Parent 2 linked to " + student["full_name"])
-                else:
-                    reply = (student["full_name"] + " already has 2 parents linked.\n\n"
-                             "Please contact the school to update this.")
-                conn.close()
-                send_messenger(sender_id, reply)
-            else:
-                send_messenger(sender_id,
-                    "Sorry, we could not find a student with LRN: " + rfid_code + "\n\n"
-                    "Please check the LRN on your child's ID card and try again.")
-                print("Unknown RFID from Messenger: " + rfid_code)
-
-    return "ok", 200
-
-    return "ok", 200
+            # One or more LRNs found — link each one, then send back a
+            # single combined reply covering all of them together,
+            # rather than a separate message per child.
+            replies = [_link_one_lrn(rfid_code, sender_id, school_name)
+                       for rfid_code in found_lrns]
+            send_messenger(sender_id, "\n\n".join(replies))
 
 
 @app.route("/webhook_guide")
