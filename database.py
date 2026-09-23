@@ -248,6 +248,7 @@ def setup_database():
         ("announcement",         ""),
         ("school_logo",          ""),
         ("webhook_verify_token", "rfid_school_verify"),
+        ("keepalive_enabled",    "1"),
         ("messenger_page_id",    "61590225764767"),
     ]
     for key, value in defaults:

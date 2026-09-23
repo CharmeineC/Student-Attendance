@@ -433,6 +433,14 @@ def start_inactivity_scheduler(inactivity_hours=20, recheck_minutes=60,
 
         while True:
             try:
+                if get_setting("keepalive_enabled") == "0":
+                    # Paused via Settings — check again next cycle in case
+                    # it gets turned back on, rather than stopping the
+                    # background thread entirely (which would need a
+                    # restart to resume).
+                    time.sleep(recheck_minutes * 60)
+                    continue
+
                 if _is_holiday_mode_active():
                     time.sleep(recheck_minutes * 60)
                     continue
