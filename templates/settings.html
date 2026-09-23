@@ -410,7 +410,16 @@ function turnOffHolidayMode() {
     headers: {'Content-Type':'application/json'},
     body: JSON.stringify({active: false})
   }).then(r=>r.json()).then(() => {
-    result.textContent = '✅ Holiday Mode OFF — automatic keep-alive resumed.';
+    // Holiday Mode ending only actually resumes pings if the separate
+    // manual keep-alive toggle (above) is ALSO currently on — otherwise
+    // this message would incorrectly say "resumed" while pings are
+    // still paused by that other control.
+    const manualToggle = document.getElementById('keepalive-checkbox');
+    if (manualToggle && !manualToggle.checked) {
+      result.textContent = '✅ Holiday Mode OFF. Note: keep-alive pings are still paused — the separate "Keep-Alive Pings" toggle above is switched off.';
+    } else {
+      result.textContent = '✅ Holiday Mode OFF — automatic keep-alive resumed.';
+    }
     result.style.color = '#00b87a';
     refreshHolidayStatus();
   }).catch(() => { result.textContent = 'Error.'; result.style.color = '#dc2626'; });
