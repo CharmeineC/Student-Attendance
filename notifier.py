@@ -680,13 +680,15 @@ def start_sms_queue_worker(poll_seconds=5, min_pace_seconds=3, max_pace_seconds=
             try:
                 job = claim_next_sms_job(worker_id)
                 if job:
-                    success, message_ref = send_sms_sim800c(
+                    success, message_ref, retryable = send_sms_sim800c(
                         job["phone_number"], job["message"], port=pinned_port
                     )
                     mark_sms_job_complete(
                         job["id"], success,
                         error=None if success else "send failed (see server log)",
-                        message_ref=message_ref
+                        message_ref=message_ref,
+                        worker_id=worker_id,
+                        retryable=retryable,
                     )
                     pace = random.uniform(min_pace_seconds, max_pace_seconds)
                     time.sleep(pace)
@@ -815,25 +817,39 @@ def send_sms_sim800c(phone_number, message_text, port=None):
         potentially colliding on the same port. If omitted, falls back
         to the original single-device auto-detect behavior.
 
-    Returns (success: bool, message_ref: int or None). message_ref is
-    the modem's own reference number for this specific SMS (from the
-    +CMGS response) — this is what a LATER delivery report (+CDS),
-    if one arrives, uses to identify which message it's actually
+    Returns (success: bool, message_ref: int or None, retryable: bool).
+    message_ref is the modem's own reference number for this specific
+    SMS (from the +CMGS response) — this is what a LATER delivery report
+    (+CDS), if one arrives, uses to identify which message it's actually
     confirming. Capturing it now is what makes matching a future
     delivery report back to this exact message possible at all; on
     its own it doesn't yet confirm real delivery — that requires the
     separate delivery-report listener (a bigger, hardware-dependent
     piece, not part of this function).
+
+    retryable (only meaningful when success is False) tells the caller
+    whether it's SAFE to automatically retry this exact message on a
+    different SIM800C: True for failures where the message provably
+    never reached the network (modem not responding, SIM not
+    registered, no send prompt, an explicit ERROR from the modem).
+    False for the "Unclear SMS result" case and for any exception that
+    happens AFTER the message body was already written to the modem —
+    in both, the SMS may have actually gone out, so retrying risks
+    sending the same parent the same text twice.
     """
     if not port:
         port = find_sim800c_port()
     if not port:
         print("  ❌ SIM800C not found. Check USB connection and port in Settings.")
-        return False, None
+        return False, None, True  # never even started — safe to retry elsewhere
 
     number = _format_phone_number(phone_number)
     print(f"  📱 Sending SMS to {number} via {port}...")
 
+    body_written = False  # tracks whether we'd already written the message
+                           # body before any failure/exception happened —
+                           # once that's true, we can no longer be sure a
+                           # failure means the SMS wasn't actually sent.
     ser = None
     try:
         import serial
@@ -867,13 +883,13 @@ def send_sms_sim800c(phone_number, message_text, port=None):
             time.sleep(1)
         if not at_ok:
             print("  ❌ SIM800C not responding to AT command (after 3 attempts).")
-            return False, None
+            return False, None, True
 
         # Check network registration
         resp = send_at("AT+CREG?", wait=1)
         if ",1" not in resp and ",5" not in resp:
             print("  ❌ SIM not registered on network. Check SIM card.")
-            return False, None
+            return False, None, True
 
         # Check signal quality
         resp = send_at("AT+CSQ", wait=0.5)
@@ -899,9 +915,10 @@ def send_sms_sim800c(phone_number, message_text, port=None):
         resp = send_at(f'AT+CMGS="{number}"', wait=2)
         if ">" not in resp:
             print(f"  ❌ No prompt from modem: {resp.strip()!r}")
-            return False, None
+            return False, None, True
 
         # Write message body + Ctrl-Z to send
+        body_written = True
         ser.write((message_text + chr(26)).encode("utf-8", errors="replace"))
 
         # Poll for the confirmation instead of one fixed-length read —
@@ -931,17 +948,25 @@ def send_sms_sim800c(phone_number, message_text, port=None):
             except (IndexError, ValueError):
                 pass
             print(f"  ✅ SMS sent successfully! (ref: {message_ref})")
-            return True, message_ref
+            return True, message_ref, False
         elif "ERROR" in resp:
             print(f"  ❌ SMS failed with error: {resp.strip()}")
-            return False, None
+            # The modem explicitly rejected it — a clean, provable failure,
+            # safe to retry on another SIM800C.
+            return False, None, True
         else:
             print(f"  ⚠️  Unclear SMS result after {waited}s: {resp.strip()!r}")
-            return False, None
+            # Ambiguous — the message may well have gone out. Do NOT
+            # auto-retry (would risk texting the parent twice); leave it
+            # as a permanent failure for an admin to check.
+            return False, None, False
 
     except Exception as e:
         print(f"  ❌ SMS error: {e}")
-        return False, None
+        # Only safe to retry if this happened before we'd written the
+        # message body to the modem — after that point, we can't be sure
+        # the SMS wasn't actually sent.
+        return False, None, not body_written
 
     finally:
         # Always close, then give Windows/the CH340 driver a moment to
@@ -983,7 +1008,7 @@ def test_sms(phone_number, port=None):
     msg    = f"TEST: CES RFID Attendance System is working. - {school}"
     label  = f" via {port}" if port else ""
     print(f"\n📱 Sending test SMS to {number}{label}...")
-    result, _ = send_sms_sim800c(phone_number, msg, port=port)
+    result, _, _ = send_sms_sim800c(phone_number, msg, port=port)
     if result:
         print("✅ Test SMS sent!")
         return True, f"✅ Test SMS sent to {number}{label}!"

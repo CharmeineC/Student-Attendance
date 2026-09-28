@@ -661,9 +661,19 @@ def api_sms_queue_complete():
     Called by a worker after it actually attempted to send a claimed job,
     reporting back whether it succeeded.
     Body (JSON): {"job_id": int, "worker_id": str, "success": bool,
-                  "error": str|null, "message_ref": int|null}
+                  "error": str|null, "message_ref": int|null,
+                  "retryable": bool}
     message_ref is the modem's reference number for this SMS, needed to
     later match an asynchronous delivery report back to this exact job.
+
+    retryable (only meaningful when success is False): True means this
+    worker's SIM800C provably never got the message out (modem not
+    responding, SIM not registered, explicit modem ERROR, etc.) — the
+    job is put back in the queue for a DIFFERENT SIM800C to try, instead
+    of being marked permanently failed. Omitted/False (older workers,
+    or an ambiguous "unclear result") keeps the old behavior: one
+    attempt, then a permanent 'failed' record, since retrying an
+    ambiguous send risks texting the same parent twice.
     """
     from database import mark_sms_job_complete
     data = request.get_json() or {}
@@ -671,9 +681,12 @@ def api_sms_queue_complete():
     success = bool(data.get("success"))
     error = data.get("error")
     message_ref = data.get("message_ref")
+    worker_id = data.get("worker_id")
+    retryable = bool(data.get("retryable"))
     if job_id is None:
         return jsonify({"success": False, "message": "job_id required"}), 400
-    mark_sms_job_complete(job_id, success, error, message_ref=message_ref)
+    mark_sms_job_complete(job_id, success, error, message_ref=message_ref,
+                           worker_id=worker_id, retryable=retryable)
     return jsonify({"success": True})
 
 
@@ -1118,6 +1131,8 @@ def api_notification_log():
                 "notify_detail":  l["notify_detail"],
                 "notified":       l["notified"],
                 "sms_status":     l["sms_status"],
+                "sms_attempts":   l["sms_attempts"],
+                "sms_tried_workers": l["sms_tried_workers"],
             }
             for l in logs
         ]

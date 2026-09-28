@@ -228,6 +228,12 @@ def setup_database():
     conn.execute("ALTER TABLE sms_queue ADD COLUMN IF NOT EXISTS message_ref INTEGER")
     conn.execute("ALTER TABLE sms_queue ADD COLUMN IF NOT EXISTS delivery_status TEXT")
     conn.execute("ALTER TABLE sms_queue ADD COLUMN IF NOT EXISTS delivery_checked_at TEXT")
+    # Comma-separated list of worker_ids (e.g. "host-COM8,host-COM10") that
+    # have already tried and failed to send this exact job — lets
+    # claim_next_sms_job() steer a re-queued job toward a DIFFERENT SIM800C
+    # first, instead of it immediately bouncing back to the one that just
+    # failed on it.
+    conn.execute("ALTER TABLE sms_queue ADD COLUMN IF NOT EXISTS tried_workers TEXT")
 
     conn.execute("""
         CREATE TABLE IF NOT EXISTS settings (
@@ -536,7 +542,9 @@ def get_recent_notification_log(limit=100, section=None, grade_level=None,
     params.append(limit)
 
     rows = conn.execute(f"""
-        SELECT a.*, s.full_name, s.section, q.status AS sms_status
+        SELECT a.*, s.full_name, s.section,
+               q.status AS sms_status, q.attempts AS sms_attempts,
+               q.tried_workers AS sms_tried_workers
         FROM attendance_logs a
         JOIN students s ON a.student_id = s.id
         LEFT JOIN sms_queue q ON a.sms_job_id = q.id
@@ -710,6 +718,14 @@ def claim_next_sms_job(worker_id, stale_minutes=2):
     `stale_minutes` ago is put back to 'pending' so it doesn't get stuck
     forever waiting on a worker that's gone.
 
+    Picks the oldest pending job, but PREFERS one this worker hasn't
+    already tried and failed on (see tried_workers) — this is what
+    actually makes a failed-and-requeued job go out via a DIFFERENT
+    SIM800C first, rather than immediately bouncing back to the one that
+    just failed on it. If every pending job has already been tried by
+    this worker (e.g. there's genuinely only one SIM800C available), it
+    falls back to trying again anyway rather than starving the queue.
+
     Returns the claimed job row, or None if nothing is pending.
     """
     conn = get_connection()
@@ -723,10 +739,20 @@ def claim_next_sms_job(worker_id, stale_minutes=2):
     """, (stale_cutoff,))
     conn.commit()
 
+    # "Already tried by ME" jobs sort last (1) so an untried job (0) is
+    # always preferred first — but they're still here as a fallback.
+    # The '%'-wildcards are built into the parameter value itself (not
+    # left in the raw SQL text) since psycopg2 treats a literal "%" in
+    # the query string as a formatting character, not just sqlite3's "?".
+    already_tried_marker = "%," + worker_id + ",%"
     row = conn.execute("""
         SELECT id FROM sms_queue WHERE status='pending'
-        ORDER BY created_at ASC LIMIT 1
-    """).fetchone()
+        ORDER BY
+            CASE WHEN (',' || COALESCE(tried_workers, '') || ',') LIKE ?
+                 THEN 1 ELSE 0 END,
+            created_at ASC
+        LIMIT 1
+    """, (already_tried_marker,)).fetchone()
 
     if not row:
         conn.close()
@@ -749,7 +775,14 @@ def claim_next_sms_job(worker_id, stale_minutes=2):
     return claimed  # None if another worker won the race
 
 
-def mark_sms_job_complete(job_id, success, error=None, message_ref=None):
+MAX_SMS_RETRY_ATTEMPTS = 3  # how many total SIM800C attempts a single SMS
+                             # job gets (across different workers/SIMs)
+                             # before it's given up on and marked 'failed'
+                             # for good.
+
+
+def mark_sms_job_complete(job_id, success, error=None, message_ref=None,
+                           worker_id=None, retryable=False):
     """
     Called by a worker after it actually attempted to send a claimed job.
 
@@ -760,14 +793,65 @@ def mark_sms_job_complete(job_id, success, error=None, message_ref=None):
     this does not yet confirm real delivery — 'sent' here still only
     means the modem successfully handed the message to the network, not
     that Globe actually delivered it to the phone.
+
+    retryable: only meaningful when success=False. True means the failure
+    is one where we can be confident the message did NOT actually go out
+    (e.g. the modem never responded, the SIM isn't registered, or the
+    network came back with an explicit ERROR) — safe to automatically put
+    the job back in the queue for another SIM800C to try. False (the
+    default) covers ambiguous cases like "Unclear SMS result", where the
+    message may well have already been sent and a retry risks texting the
+    same parent twice — those are left as a permanent 'failed' record for
+    an admin to check instead of being retried automatically.
+
+    worker_id: the worker that just attempted this job — recorded in
+    tried_workers on a retry so claim_next_sms_job() steers the retry
+    toward a different SIM800C first.
     """
     conn = get_connection()
     now = ph_now().strftime("%Y-%m-%d %H:%M:%S")
-    status = 'sent' if success else 'failed'
+
+    if success:
+        conn.execute("""
+            UPDATE sms_queue SET status='sent', completed_at=?, error_message=?, message_ref=?
+            WHERE id=?
+        """, (now, error, message_ref, job_id))
+        conn.commit()
+        conn.close()
+        return
+
+    row = conn.execute("SELECT attempts, tried_workers FROM sms_queue WHERE id=?", (job_id,)).fetchone()
+    attempts = (row["attempts"] if row else 0) or 0
+    prior_tried = (row["tried_workers"] if row else "") or ""
+
+    if retryable and attempts < MAX_SMS_RETRY_ATTEMPTS:
+        tried_list = [w for w in prior_tried.split(",") if w]
+        if worker_id and worker_id not in tried_list:
+            tried_list.append(worker_id)
+        new_tried = ",".join(tried_list)
+        # Back to 'pending' (NOT 'failed') so another SIM800C worker picks
+        # it up — claimed_by/claimed_at cleared so it looks like a fresh,
+        # unclaimed job again. error_message is kept as the most recent
+        # failure reason for visibility, even though the job isn't done.
+        conn.execute("""
+            UPDATE sms_queue
+            SET status='pending', claimed_by=NULL, claimed_at=NULL,
+                error_message=?, tried_workers=?
+            WHERE id=?
+        """, (f"Retrying after failure ({attempts}/{MAX_SMS_RETRY_ATTEMPTS}): {error}", new_tried, job_id))
+        conn.commit()
+        conn.close()
+        return
+
+    # Not retryable, or already used up every retry attempt — give up for
+    # good and record it as a real, permanent failure.
+    final_error = error
+    if retryable and attempts >= MAX_SMS_RETRY_ATTEMPTS:
+        final_error = f"Failed after {attempts} attempts on different SIM800Cs. Last error: {error}"
     conn.execute("""
-        UPDATE sms_queue SET status=?, completed_at=?, error_message=?, message_ref=?
+        UPDATE sms_queue SET status='failed', completed_at=?, error_message=?, message_ref=?
         WHERE id=?
-    """, (status, now, error, message_ref, job_id))
+    """, (now, final_error, message_ref, job_id))
     conn.commit()
     conn.close()
 
