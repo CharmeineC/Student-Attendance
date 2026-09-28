@@ -1,4 +1,5 @@
 import re
+from collections import OrderedDict
 """
 app.py
 ------
@@ -62,6 +63,32 @@ MAX_REQUEST_SIZE = 200 * 1024 * 1024  # 200MB — total request size, generous
 
 app.config["UPLOAD_FOLDER"]    = UPLOAD_FOLDER
 app.config["MAX_CONTENT_LENGTH"] = MAX_REQUEST_SIZE
+
+# ── Messenger webhook de-duplication ────────────────────────────────────────
+# Facebook re-sends a webhook event if it doesn't get a fast, successful
+# response the first time (slow server, timeout, or — as happened here — a
+# bug that let the view function return nothing at all). Without tracking
+# what's already been handled, a re-sent event gets fully reprocessed and
+# the SAME reply gets sent to the parent again, which looks like the bot
+# randomly spamming the same message. This just remembers the last 1000
+# message IDs handled (in memory — resets on redeploy, which is fine since
+# Facebook's retries taper off within a few hours anyway) and skips any
+# event already seen.
+_webhook_seen_ids = OrderedDict()
+_webhook_seen_lock = threading.Lock()
+_WEBHOOK_SEEN_MAX = 1000
+
+
+def _webhook_event_already_handled(event_key):
+    """Returns True (and does nothing else) if this exact event was
+    already processed; otherwise records it and returns False."""
+    with _webhook_seen_lock:
+        if event_key in _webhook_seen_ids:
+            return True
+        _webhook_seen_ids[event_key] = True
+        if len(_webhook_seen_ids) > _WEBHOOK_SEEN_MAX:
+            _webhook_seen_ids.popitem(last=False)  # drop the oldest
+        return False
 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
@@ -1358,6 +1385,19 @@ def webhook():
             if not sender_id:
                 continue
 
+            # Skip an event we've already handled — this is what actually
+            # stops a Facebook retry (a webhook re-delivery of the exact
+            # same event) from sending the parent the same reply twice.
+            # message.mid is Facebook's own unique id for a message event;
+            # postbacks/referrals don't have one, so those fall back to a
+            # sender+timestamp+payload combo instead.
+            event_key = (message.get("mid") if message else None) or (
+                f"{sender_id}:{event.get('timestamp')}:"
+                f"{postback.get('payload', '')}:{event.get('referral', {}).get('ref', '')}"
+            )
+            if _webhook_event_already_handled(event_key):
+                continue
+
             # ── Quick reply / text command detection ──────────────────────────────
             # Quick reply buttons send a MESSAGES event (not postback),
             # so they work with the standard messages subscription.
@@ -1541,6 +1581,15 @@ def webhook():
             replies = [_link_one_lrn(rfid_code, sender_id, school_name)
                        for rfid_code in found_lrns]
             send_messenger(sender_id, "\n\n".join(replies))
+
+    # IMPORTANT: this must always return a real response. Without it,
+    # Flask errors out (returns nothing) for every message that falls
+    # through to plain text handling (not a button/command match), which
+    # Facebook sees as a FAILED delivery — so it keeps re-sending the
+    # exact same message event to this webhook, causing the same reply
+    # to be sent to the parent over and over ("spamming"), sometimes
+    # minutes or hours apart, until Facebook gives up retrying.
+    return "ok", 200
 
 
 @app.route("/webhook_guide")
