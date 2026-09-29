@@ -696,12 +696,24 @@ def get_blast_recipients(blast_id):
 
 def queue_sms_job(phone_number, message):
     """Add an SMS to the shared queue. Any worker (host or remote PC) may
-    pick it up. Returns the new job's id."""
+    pick it up. Returns the new job's id.
+
+    created_at is set explicitly here using ph_now() rather than relying
+    on the column's own DEFAULT (which calls Postgres's now() using the
+    DB server's clock — Railway's servers default to UTC, 8 hours behind
+    Philippine time). Every other timestamp in this app is explicitly
+    set via ph_now() for exactly this reason; created_at was missed
+    during that earlier fix since it was only ever used for ordering,
+    where an 8-hour offset is invisible — but it breaks the moment
+    anything compares it against a real calendar date/time, such as
+    "cancel anything queued before today".
+    """
     conn = get_connection()
+    now = ph_now().strftime("%Y-%m-%d %H:%M:%S")
     cursor = conn.execute("""
-        INSERT INTO sms_queue (phone_number, message, status)
-        VALUES (?, ?, 'pending')
-    """, (phone_number, message))
+        INSERT INTO sms_queue (phone_number, message, status, created_at)
+        VALUES (?, ?, 'pending', ?)
+    """, (phone_number, message, now))
     job_id = cursor.lastrowid
     conn.commit()
     conn.close()
@@ -888,6 +900,30 @@ def cancel_all_pending_sms_jobs():
         UPDATE sms_queue SET status='cancelled', completed_at=?
         WHERE status='pending'
     """, (now,))
+    conn.commit()
+    count = cursor.rowcount
+    conn.close()
+    return count
+
+
+def cancel_stale_pending_sms_jobs():
+    """
+    Cancel only PENDING SMS jobs that were queued before today (Philippine
+    time) — e.g. a backlog that built up while no SMS worker was running.
+    A "your child arrived/left school" notification that's a full day
+    late isn't useful to a parent anymore and can be confusing, and
+    sending the whole stale backlog first also delays today's actually-
+    relevant notifications behind it (the queue is oldest-first). This
+    leaves anything queued TODAY untouched so it still goes out normally.
+    Returns how many were cancelled.
+    """
+    conn = get_connection()
+    now = ph_now().strftime("%Y-%m-%d %H:%M:%S")
+    today_start = ph_now().strftime("%Y-%m-%d") + " 00:00:00"
+    cursor = conn.execute("""
+        UPDATE sms_queue SET status='cancelled', completed_at=?
+        WHERE status='pending' AND created_at < ?
+    """, (now, today_start))
     conn.commit()
     count = cursor.rowcount
     conn.close()

@@ -751,6 +751,19 @@ def api_sms_queue_cancel_all_pending():
                      "message": f"Cancelled {count} pending SMS job(s)."})
 
 
+@app.route("/api/sms_queue/cancel_stale_pending", methods=["POST"])
+def api_sms_queue_cancel_stale_pending():
+    """
+    Cancel only pending SMS queued before today (Philippine time) —
+    e.g. a backlog left over from an SMS worker being offline yesterday.
+    Anything queued TODAY is left untouched and will still send normally.
+    """
+    from database import cancel_stale_pending_sms_jobs
+    count = cancel_stale_pending_sms_jobs()
+    return jsonify({"success": True, "cancelled": count,
+                     "message": f"Cancelled {count} stale pending SMS job(s) from before today."})
+
+
 @app.route("/api/sms_queue/clear_cancelled", methods=["POST"])
 def api_sms_queue_clear_cancelled():
     """
