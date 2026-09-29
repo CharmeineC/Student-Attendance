@@ -240,6 +240,7 @@
 
     <div style="margin-bottom:10px;display:flex;gap:14px;align-items:center">
       <button type="button" class="link-btn" onclick="loadNotificationLog()">🔄 Refresh</button>
+      <button type="button" class="link-btn" style="color:var(--amber)" onclick="cancelStalePendingSms()">🕒 Cancel yesterday's pending (keep today's)</button>
       <button type="button" class="link-btn" style="color:var(--red)" onclick="cancelAllPendingSms()">🛑 Cancel all pending SMS</button>
       <button type="button" class="link-btn" onclick="clearCancelledSms()">🧹 Clear cancelled SMS</button>
     </div>
@@ -399,20 +400,34 @@ function loadNotificationLog() {
           pending: '⏳ pending', claimed: '🔄 claimed',
           sent: '✅ sent', failed: '❌ failed', cancelled: '✕ cancelled'
         };
+        // A 'pending' job that already has attempts/tried_workers isn't a
+        // fresh job — it failed on at least one SIM800C already and is
+        // waiting to be picked up by a different one, so it's labeled
+        // "retrying" rather than a plain "pending" that could confusingly
+        // suggest nothing has happened yet.
+        const isRetrying = l.sms_status === 'pending' &&
+          (l.sms_tried_workers && l.sms_tried_workers.length > 0);
+        function smsStatusText(status) {
+          if (isRetrying) return `🔁 retrying (attempt ${l.sms_attempts || 0})`;
+          return status ? (smsStatusLabel[status] || status) : '';
+        }
         if (l.notify_channel === 'none') {
           channelDisplay = '❌ Not sent';
           channelColor = 'var(--red)';
         } else if (l.notify_detail && l.notify_channel.includes('sms')) {
-          const statusTxt = l.sms_status ? ` (${smsStatusLabel[l.sms_status] || l.sms_status})` : '';
+          const statusTxt = l.sms_status ? ` (${smsStatusText(l.sms_status)})` : '';
           channelDisplay = `📱 SMS fallback${statusTxt}`;
           channelColor = 'var(--amber)';
         } else if (l.notify_channel.includes('sms')) {
-          const statusTxt = l.sms_status ? ` (${smsStatusLabel[l.sms_status] || l.sms_status})` : '';
+          const statusTxt = l.sms_status ? ` (${smsStatusText(l.sms_status)})` : '';
           channelDisplay = `📱 SMS${statusTxt}`;
           channelColor = 'var(--blue)';
         } else if (l.notify_channel.includes('messenger')) {
           channelDisplay = '💬 Messenger';
           channelColor = 'var(--green)';
+        } else if (l.notify_channel === 'recovered') {
+          channelDisplay = '🔄 Recovered (no notification sent)';
+          channelColor = 'var(--muted)';
         } else {
           channelDisplay = l.notify_channel;
           channelColor = 'var(--muted)';
@@ -454,6 +469,17 @@ function clearNotificationFilters() {
   document.getElementById('filter-start-date').value = '';
   document.getElementById('filter-end-date').value = '';
   loadNotificationLog();
+}
+
+function cancelStalePendingSms() {
+  if (!confirm("Cancel pending SMS queued BEFORE today? Today's queued SMS will be left alone and still sent.")) return;
+  fetch('/api/sms_queue/cancel_stale_pending', { method: 'POST' })
+    .then(r => r.json())
+    .then(data => {
+      alert(data.message || 'Done.');
+      loadNotificationLog();
+    })
+    .catch(() => alert('Error cancelling.'));
 }
 
 function cancelAllPendingSms() {
