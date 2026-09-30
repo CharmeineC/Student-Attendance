@@ -479,6 +479,34 @@ def mark_notified(log_id, channel, detail=None, sms_job_id=None):
     conn.close()
 
 
+def get_missed_messenger_events_this_week(student_id):
+    """
+    This student's attendance events from the current week (Monday
+    through today) that were never delivered via Messenger — either
+    nothing was linked yet (notify_channel was 'sms' or 'none') — so a
+    newly-linked parent can get caught up in one summary message.
+
+    Scoped to "this week" (not all-time) so the catch-up message stays
+    naturally short (at most ~14 events) without needing to cap or
+    truncate anything.
+    """
+    today = ph_now()
+    monday = today - timedelta(days=today.weekday())  # Monday of this week
+    week_start = monday.strftime("%Y-%m-%d")
+
+    conn = get_connection()
+    rows = conn.execute("""
+        SELECT scan_type, scan_time, scan_date
+        FROM attendance_logs
+        WHERE student_id = ?
+          AND (notify_channel IS NULL OR notify_channel != 'messenger')
+          AND scan_date >= ?
+        ORDER BY scan_date ASC, scan_time ASC
+    """, (student_id, week_start)).fetchall()
+    conn.close()
+    return rows
+
+
 def get_today_logs(limit=50):
     today = ph_now().strftime("%Y-%m-%d")
     conn  = get_connection()

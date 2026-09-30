@@ -1320,7 +1320,7 @@ def _link_one_lrn(rfid_code, sender_id, school_name):
     caller combines replies from all LRNs found in the message into a
     single Messenger message).
     """
-    from database import get_connection
+    from database import get_connection, get_missed_messenger_events
     student = get_student_by_lrn(rfid_code)
 
     if not student:
@@ -1344,6 +1344,7 @@ def _link_one_lrn(rfid_code, sender_id, school_name):
                  " (" + (student["section"] or "") + ").\n"
                  "You will receive a message every time your child "
                  "arrives at or leaves " + school_name + ".")
+        reply += _catchup_summary_text(student["id"])
         print("Parent 1 linked to " + student["full_name"])
     elif not existing2:
         conn.execute("UPDATE students SET messenger_id_2=? WHERE lrn=?",
@@ -1353,12 +1354,41 @@ def _link_one_lrn(rfid_code, sender_id, school_name):
                  " (" + (student["section"] or "") + ").\n"
                  "You will receive a message every time your child "
                  "arrives at or leaves " + school_name + ".")
+        reply += _catchup_summary_text(student["id"])
         print("Parent 2 linked to " + student["full_name"])
     else:
         reply = (student["full_name"] + " already has 2 parents linked.\n"
                  "Please contact the school to update this.")
     conn.close()
     return reply
+
+
+def _catchup_summary_text(student_id):
+    """
+    Builds a "here's what you missed" summary of this WEEK's (Monday
+    through today) attendance events that happened before this parent
+    was linked, so they never got a Messenger notification for them.
+    Scoped to this week only, so it's naturally short — no cap or
+    "+N more" note needed. Returns "" when there's nothing to catch up
+    on (e.g. they linked before any scans happened this week).
+    """
+    from database import get_missed_messenger_events_this_week
+    rows = get_missed_messenger_events_this_week(student_id)
+    if not rows:
+        return ""
+
+    lines = []
+    for r in rows:
+        try:
+            dt = datetime.strptime(r["scan_date"] + " " + r["scan_time"], "%Y-%m-%d %H:%M:%S")
+            when = dt.strftime("%a %b %d, %I:%M %p").replace(" 0", " ")
+        except Exception:
+            when = r["scan_date"] + " " + r["scan_time"]
+        label = "IN" if (r["scan_type"] or "").upper() == "IN" else "OUT"
+        lines.append(f"• {label} — {when}")
+
+    header = "\n\nHere's this week's attendance you may have missed while not yet linked:\n"
+    return header + "\n".join(lines)
 
 
 @app.route("/webhook", methods=["GET", "POST"])
