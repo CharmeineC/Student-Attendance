@@ -1155,8 +1155,15 @@ def api_notification_log():
     start_date  = request.args.get("start_date") or None
     end_date    = request.args.get("end_date") or None
 
+    # With no date filter, this powers a "recent activity" glance, so 200
+    # is plenty. But once a date range is applied, the admin is asking to
+    # see a specific day (or range) in full — a busy school day can have
+    # 500+ scans (2 per student, IN+OUT), and capping at 200 there would
+    # silently hide the rest even though the filter looks like it worked.
+    limit = 5000 if (start_date or end_date) else 200
+
     logs = get_recent_notification_log(
-        limit=200, section=section, grade_level=grade_level,
+        limit=limit, section=section, grade_level=grade_level,
         start_date=start_date, end_date=end_date
     )
     return jsonify({
