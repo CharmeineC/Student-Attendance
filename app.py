@@ -1327,7 +1327,7 @@ def _link_one_lrn(rfid_code, sender_id, school_name):
     caller combines replies from all LRNs found in the message into a
     single Messenger message).
     """
-    from database import get_connection, get_missed_messenger_events
+    from database import get_connection
     student = get_student_by_lrn(rfid_code)
 
     if not student:
