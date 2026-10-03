@@ -131,13 +131,16 @@ def login():
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
         matched_user = None
+        matched_slot = None
         for slot, acct_username, pw_hash in _get_admin_accounts():
             if username and acct_username == username and check_password_hash(pw_hash, password):
                 matched_user = acct_username
+                matched_slot = slot
                 break
         if matched_user:
             session["logged_in"] = True
             session["admin_user"] = matched_user
+            session["admin_slot"] = matched_slot
             next_path = request.form.get("next") or request.args.get("next") or ""
             # Only follow it if it's a plain relative path on this same
             # site (starts with exactly one "/") — never an external URL,
@@ -155,6 +158,7 @@ def login():
 def logout():
     session.pop("logged_in", None)
     session.pop("admin_user", None)
+    session.pop("admin_slot", None)
     return redirect(url_for("login"))
 
 # Always initialize the database when the app loads — regardless of how
@@ -612,10 +616,15 @@ def settings():
     # whatever the current public address is (Railway, ngrok, anything else),
     # not a hardcoded placeholder that goes stale.
     live_webhook_url = request.host_url.rstrip("/") + "/webhook"
+    # Each admin can only see/edit their OWN login here, never the other
+    # account's — so account 2 can't view or change account 1's username
+    # or password, and vice versa.
+    current_admin_slot = session.get("admin_slot")
     return render_template("settings.html",
                            settings=all_settings,
                            school_name=school_name,
-                           live_webhook_url=live_webhook_url)
+                           live_webhook_url=live_webhook_url,
+                           current_admin_slot=current_admin_slot)
 
 
 @app.route("/settings/save", methods=["POST"])
@@ -627,15 +636,21 @@ def settings_save():
             continue  # handled separately below
         save_setting(key, value.strip())
 
-    for slot in ADMIN_SLOTS:
-        new_username = request.form.get(f"admin{slot}_username", "").strip()
+    # Only ever change the CURRENTLY LOGGED IN account's own username/
+    # password here — even if a crafted request tried to include the
+    # other slot's fields, it's ignored, since the form only ever renders
+    # fields for the logged-in admin's own slot anyway.
+    current_slot = session.get("admin_slot")
+    if current_slot in ADMIN_SLOTS:
+        new_username = request.form.get(f"admin{current_slot}_username", "").strip()
         if new_username:
-            save_setting(f"admin{slot}_username", new_username)
-        new_password = request.form.get(f"admin{slot}_password", "")
+            save_setting(f"admin{current_slot}_username", new_username)
+            session["admin_user"] = new_username
+        new_password = request.form.get(f"admin{current_slot}_password", "")
         # Blank password field means "keep the current password" rather
         # than wiping it out. Never store the plaintext password itself.
         if new_password.strip():
-            save_setting(f"admin{slot}_password_hash", generate_password_hash(new_password.strip()))
+            save_setting(f"admin{current_slot}_password_hash", generate_password_hash(new_password.strip()))
 
     return redirect(url_for("settings") + "?saved=1")
 
