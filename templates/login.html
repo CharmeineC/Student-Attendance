@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Admin Login — {{ school_name }}</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet"/>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  :root{--bg:#f5f6fa;--card:#fff;--border:#e0e4ef;--blue:#2563eb;--red:#dc2626;--text:#1a1d2e;--muted:#6b7280;--shadow:0 2px 12px rgba(0,0,0,0.07)}
+  body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:40px;max-width:380px;width:100%;box-shadow:var(--shadow);text-align:center}
+  .icon{font-size:40px;margin-bottom:16px}
+  h1{font-size:18px;font-weight:800;margin-bottom:6px}
+  .subtitle{font-size:13px;color:var(--muted);margin-bottom:28px}
+  .form-row{margin-bottom:16px;text-align:left}
+  .form-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px;display:block}
+  .form-input{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:11px 14px;color:var(--text);font-size:14px;outline:none;font-family:'Inter',sans-serif}
+  .form-input:focus{border-color:var(--blue)}
+  .btn{width:100%;padding:12px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;border:none;font-family:'Inter',sans-serif;background:var(--blue);color:#fff;margin-top:4px}
+  .btn:hover{background:#1d4ed8}
+  .error{background:#fef2f2;border:1px solid #fecaca;color:var(--red);padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:18px;text-align:left}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="icon">🔒</div>
+  <h1>Admin Login</h1>
+  <div class="subtitle">{{ school_name }} Attendance System</div>
+
+  {% if error %}
+  <div class="error">⚠️ {{ error }}</div>
+  {% endif %}
+
+  <form method="POST" action="/login">
+    <input type="hidden" name="next" value="{{ request.args.get('next','') }}"/>
+    <div class="form-row">
+      <label class="form-label">Password</label>
+      <input class="form-input" type="password" name="password" autocomplete="current-password" autofocus required/>
+    </div>
+    <button type="submit" class="btn">Log In</button>
+  </form>
+</div>
+</body>
+</html>

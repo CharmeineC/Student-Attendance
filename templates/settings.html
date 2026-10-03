@@ -57,6 +57,7 @@
     <a href="/blast"       class="nav-link">📣 Blast</a>
     
     <a href="/settings" class="nav-link active">⚙️ Settings</a>
+    <a href="/logout" class="nav-link">🚪 Logout</a>
   </div>
 </div>
 <div class="content">
@@ -81,6 +82,20 @@
     </div>
     <div class="save-row">
       <button type="submit" class="btn btn-blue">💾 Save settings</button>
+    </div>
+  </div>
+
+  <!-- Admin password -->
+  <div class="card">
+    <div class="card-title">🔒 Admin password</div>
+    <div class="card-desc">This is the one shared password everyone allowed to use this site (besides the scanner page) logs in with. Leave blank to keep the current password unchanged.</div>
+    <div class="form-row">
+      <label class="form-label">New admin password</label>
+      <input class="form-input" type="password" name="admin_password" placeholder="Leave blank to keep current password" autocomplete="new-password"/>
+      <div class="hint">Changing this logs out everyone currently signed in next time their session ends — they'll just need the new password to log back in.</div>
+    </div>
+    <div class="save-row">
+      <button type="submit" class="btn btn-blue">💾 Save password</button>
     </div>
   </div>
 

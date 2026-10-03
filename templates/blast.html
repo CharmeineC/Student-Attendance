@@ -87,6 +87,7 @@
     <a href="/reports"  class="nav-link">📋 Reports</a>
     <a href="/blast"    class="nav-link active">📣 Blast</a>
     <a href="/settings" class="nav-link">⚙️ Settings</a>
+    <a href="/logout" class="nav-link">🚪 Logout</a>
   </div>
 </div>
 
@@ -176,7 +177,7 @@
     <div class="card-title">📜 Recent blasts</div>
     {% if recent_blasts %}
     <table>
-      <thead><tr><th>Date</th><th>Type</th><th>Message</th><th>Section</th><th>Channels</th><th>Sent</th><th>Failed</th><th>Status</th><th></th></tr></thead>
+      <thead><tr><th>Date</th><th>Type</th><th>Message</th><th>Section</th><th>Channels</th><th title="Messenger: actually delivered. SMS: successfully queued, not yet confirmed delivered — check the Notification Log below for real SMS status.">Sent/Queued ⓘ</th><th>Failed</th><th>Status</th><th></th></tr></thead>
       <tbody>
         {% for b in recent_blasts %}
         <tr>
@@ -346,9 +347,12 @@ function viewRecipients(blastId) {
       const okCount = data.recipients.filter(r => r.success).length;
       const failCount = data.recipients.length - okCount;
       let html = `<div style="font-size:12px;color:var(--muted);margin-bottom:14px">
-        ${okCount} delivered &middot; ${failCount} failed &middot; ${data.recipients.length} total
+        ${okCount} sent/queued &middot; ${failCount} failed &middot; ${data.recipients.length} total<br/>
+        <span style="font-size:11px">"Queued" (SMS) means successfully handed to the SMS queue, not yet confirmed delivered — check the Notification Log for live SMS status.</span>
       </div>`;
       data.recipients.forEach(r => {
+        const isSmsQueued = (r.channel || '').includes('sms_queued');
+        const label = isSmsQueued ? '🕒 queued (sms)' : ('✅ ' + r.channel);
         html += `<div class="recipient-row">
           <div>
             <div style="font-weight:500">${r.student_name || 'Unknown'}</div>
@@ -356,7 +360,7 @@ function viewRecipients(blastId) {
           </div>
           <div style="text-align:right">
             <div class="${r.success ? 'recipient-ok' : 'recipient-fail'}">
-              ${r.success ? '✅ ' + r.channel : '❌ Failed'}
+              ${r.success ? label : '❌ Failed'}
             </div>
           </div>
         </div>`;
