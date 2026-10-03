@@ -85,33 +85,26 @@
     </div>
   </div>
 
-  <!-- Admin accounts -->
+  <!-- Admin account — only your OWN login shows here, never the other account's -->
   <div class="card">
-    <div class="card-title">🔒 Admin accounts</div>
-    <div class="card-desc">Two separate logins — each with its own username and password. Leave a password field blank to keep that account's current password unchanged.</div>
-
-    <div class="form-row" style="padding-bottom:10px;border-bottom:1px solid #f3f4f6">
-      <label class="form-label">Account 1 — Username</label>
-      <input class="form-input" name="admin1_username" value="{{ settings.get('admin1_username','admin1') }}"/>
+    <div class="card-title">🔒 Your admin login</div>
+    {% if current_admin_slot %}
+    <div class="card-desc">You can only see and change your own username and password here — not the other admin account's. Leave the password field blank to keep your current password unchanged.</div>
+    <div class="form-row">
+      <label class="form-label">Username</label>
+      <input class="form-input" name="admin{{ current_admin_slot }}_username" value="{{ settings.get('admin' + current_admin_slot + '_username','') }}"/>
     </div>
     <div class="form-row">
-      <label class="form-label">Account 1 — New password</label>
-      <input class="form-input" type="password" name="admin1_password" placeholder="Leave blank to keep current password" autocomplete="new-password"/>
+      <label class="form-label">New password</label>
+      <input class="form-input" type="password" name="admin{{ current_admin_slot }}_password" placeholder="Leave blank to keep current password" autocomplete="new-password"/>
+      <div class="hint">Changing this logs you out next time your session ends — you'll just need the new password to log back in.</div>
     </div>
-
-    <div class="form-row" style="padding-bottom:10px;margin-top:18px;border-bottom:1px solid #f3f4f6">
-      <label class="form-label">Account 2 — Username</label>
-      <input class="form-input" name="admin2_username" value="{{ settings.get('admin2_username','admin2') }}"/>
-    </div>
-    <div class="form-row">
-      <label class="form-label">Account 2 — New password</label>
-      <input class="form-input" type="password" name="admin2_password" placeholder="Leave blank to keep current password" autocomplete="new-password"/>
-    </div>
-
-    <div class="hint">Changing a username or password only affects that one account. Whoever's logged in with it stays logged in until they log out — they'll just need the new details next time.</div>
     <div class="save-row">
-      <button type="submit" class="btn btn-blue">💾 Save accounts</button>
+      <button type="submit" class="btn btn-blue">💾 Save my login</button>
     </div>
+    {% else %}
+    <div class="card-desc">Log out and back in once to manage your login here.</div>
+    {% endif %}
   </div>
 
   <!-- Announcement ticker -->
