@@ -25,11 +25,13 @@ Install requirements:
 
 from flask import (
     Flask, render_template, request, jsonify,
-    send_file, redirect, url_for, send_from_directory
+    send_file, redirect, url_for, send_from_directory, session
 )
 from werkzeug.utils import secure_filename
+from werkzeug.security import generate_password_hash, check_password_hash
 import os
 import socket
+import secrets
 from datetime import datetime
 from database import (
     setup_database, get_student_by_rfid, get_student_by_lrn, record_scan,
@@ -45,7 +47,90 @@ import threading
 
 # ── App setup ────────────────────────────────────────────────────────────────
 app = Flask(__name__)
-app.secret_key = "rfid_school_2026"
+
+# The secret key signs login session cookies — anyone who knows it could
+# forge a logged-in session, so it must be a real secret, not something
+# checked into code. Set FLASK_SECRET_KEY as an environment variable in
+# Railway (Settings -> Variables) to a long random string. Falling back
+# to a random one generated at startup still works, but it means every
+# restart/redeploy logs everyone out (a new random key each time) — fine
+# for now, but setting the env var avoids that annoyance.
+_env_secret = os.environ.get("FLASK_SECRET_KEY")
+if not _env_secret:
+    print("⚠️  FLASK_SECRET_KEY not set — using a temporary random key for this run. "
+          "Everyone will be logged out on the next restart/deploy. Set FLASK_SECRET_KEY "
+          "in Railway's Variables for a permanent key.")
+app.secret_key = _env_secret or secrets.token_hex(32)
+
+# ── Admin login ──────────────────────────────────────────────────────────────
+# One shared admin password for everyone who's allowed to use the site
+# (change it anytime from the Settings page). The scanner page itself
+# (and the handful of endpoints it calls) stays open with no login, since
+# it's meant to be used as a walk-up kiosk. The Facebook webhook and the
+# SMS worker endpoints also stay open since those are called by Facebook's
+# servers and by sms_worker.py on the host PCs, not by a logged-in person
+# in a browser.
+PUBLIC_PATHS = {"/", "/api/scan", "/api/today_stats", "/api/announcement",
+                "/webhook", "/login"}
+PUBLIC_PREFIXES = ("/static/",)
+# These stay open because they're called by sms_worker.py / the embedded
+# host worker over plain HTTP, not from a logged-in browser session.
+PUBLIC_API_PATHS = {"/api/sms_queue/next", "/api/sms_queue/complete"}
+
+
+def _admin_password_hash():
+    stored = get_setting("admin_password_hash")
+    if stored:
+        return stored
+    # First run / never set yet — seed a default so the site isn't
+    # accidentally wide open, and print it loudly ONCE so whoever is
+    # watching the deploy logs can log in and change it immediately.
+    default_password = os.environ.get("ADMIN_INITIAL_PASSWORD") or "changeme123"
+    default_hash = generate_password_hash(default_password)
+    save_setting("admin_password_hash", default_hash)
+    print(f"⚠️  No admin password was set yet — defaulted to '{default_password}'. "
+          f"Log in with this and change it immediately on the Settings page.")
+    return default_hash
+
+
+@app.before_request
+def _require_login():
+    path = request.path
+    if path in PUBLIC_PATHS or path in PUBLIC_API_PATHS:
+        return None
+    if any(path.startswith(p) for p in PUBLIC_PREFIXES):
+        return None
+    if session.get("logged_in"):
+        return None
+    if request.path.startswith("/api/"):
+        return jsonify({"success": False, "error": "Not logged in."}), 401
+    return redirect(url_for("login", next=request.path))
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    error = None
+    if request.method == "POST":
+        password = request.form.get("password", "")
+        if check_password_hash(_admin_password_hash(), password):
+            session["logged_in"] = True
+            next_path = request.form.get("next") or request.args.get("next") or ""
+            # Only follow it if it's a plain relative path on this same
+            # site (starts with exactly one "/") — never an external URL,
+            # which someone could otherwise craft a login link with to
+            # redirect a logged-in admin elsewhere.
+            if not next_path.startswith("/") or next_path.startswith("//"):
+                next_path = url_for("admin")
+            return redirect(next_path)
+        error = "Incorrect password."
+    school_name = get_setting("school_name") or "School"
+    return render_template("login.html", error=error, school_name=school_name)
+
+
+@app.route("/logout")
+def logout():
+    session.pop("logged_in", None)
+    return redirect(url_for("login"))
 
 # Always initialize the database when the app loads — regardless of how
 # it was started (python app.py, import, batch file, or scheduled task).
@@ -506,6 +591,13 @@ def settings():
 @app.route("/settings/save", methods=["POST"])
 def settings_save():
     for key, value in request.form.items():
+        if key == "admin_password":
+            # Special-cased: never store the plaintext password, and
+            # leaving this field blank means "keep the current password"
+            # rather than wiping it out.
+            if value.strip():
+                save_setting("admin_password_hash", generate_password_hash(value.strip()))
+            continue
         save_setting(key, value.strip())
     return redirect(url_for("settings") + "?saved=1")
 
