@@ -34,8 +34,12 @@
   <form method="POST" action="/login">
     <input type="hidden" name="next" value="{{ request.args.get('next','') }}"/>
     <div class="form-row">
+      <label class="form-label">Username</label>
+      <input class="form-input" type="text" name="username" autocomplete="username" autofocus required/>
+    </div>
+    <div class="form-row">
       <label class="form-label">Password</label>
-      <input class="form-input" type="password" name="password" autocomplete="current-password" autofocus required/>
+      <input class="form-input" type="password" name="password" autocomplete="current-password" required/>
     </div>
     <button type="submit" class="btn">Log In</button>
   </form>
