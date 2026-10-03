@@ -63,13 +63,12 @@ if not _env_secret:
 app.secret_key = _env_secret or secrets.token_hex(32)
 
 # ── Admin login ──────────────────────────────────────────────────────────────
-# One shared admin password for everyone who's allowed to use the site
-# (change it anytime from the Settings page). The scanner page itself
-# (and the handful of endpoints it calls) stays open with no login, since
-# it's meant to be used as a walk-up kiosk. The Facebook webhook and the
-# SMS worker endpoints also stay open since those are called by Facebook's
-# servers and by sms_worker.py on the host PCs, not by a logged-in person
-# in a browser.
+# Two named admin accounts (username + password each), managed from the
+# Settings page. The scanner page itself (and the handful of endpoints it
+# calls) stays open with no login, since it's meant to be used as a
+# walk-up kiosk. The Facebook webhook and the SMS worker endpoints also
+# stay open since those are called by Facebook's servers and by
+# sms_worker.py on the host PCs, not by a logged-in person in a browser.
 PUBLIC_PATHS = {"/", "/api/scan", "/api/today_stats", "/api/announcement",
                 "/webhook", "/login"}
 PUBLIC_PREFIXES = ("/static/",)
@@ -77,20 +76,38 @@ PUBLIC_PREFIXES = ("/static/",)
 # host worker over plain HTTP, not from a logged-in browser session.
 PUBLIC_API_PATHS = {"/api/sms_queue/next", "/api/sms_queue/complete"}
 
+# The two admin account "slots". Each has its own username/password,
+# stored as plain settings (admin1_username, admin1_password_hash, ...).
+ADMIN_SLOTS = ("1", "2")
+_ADMIN_SLOT_DEFAULTS = {
+    "1": ("admin1", "changeme123"),
+    "2": ("admin2", "changeme456"),
+}
 
-def _admin_password_hash():
-    stored = get_setting("admin_password_hash")
-    if stored:
-        return stored
-    # First run / never set yet — seed a default so the site isn't
-    # accidentally wide open, and print it loudly ONCE so whoever is
-    # watching the deploy logs can log in and change it immediately.
-    default_password = os.environ.get("ADMIN_INITIAL_PASSWORD") or "changeme123"
-    default_hash = generate_password_hash(default_password)
-    save_setting("admin_password_hash", default_hash)
-    print(f"⚠️  No admin password was set yet — defaulted to '{default_password}'. "
-          f"Log in with this and change it immediately on the Settings page.")
-    return default_hash
+
+def _get_admin_accounts():
+    """Returns [(slot, username, password_hash), ...] for both admin slots,
+    seeding a default username/password the first time a slot is used so
+    the site is never accidentally wide open."""
+    accounts = []
+    for slot in ADMIN_SLOTS:
+        default_user, default_pass = _ADMIN_SLOT_DEFAULTS[slot]
+
+        username = get_setting(f"admin{slot}_username")
+        if not username:
+            username = default_user
+            save_setting(f"admin{slot}_username", username)
+
+        pw_hash = get_setting(f"admin{slot}_password_hash")
+        if not pw_hash:
+            seed_password = os.environ.get(f"ADMIN{slot}_INITIAL_PASSWORD") or default_pass
+            pw_hash = generate_password_hash(seed_password)
+            save_setting(f"admin{slot}_password_hash", pw_hash)
+            print(f"⚠️  No password was set yet for admin account '{username}' — defaulted to "
+                  f"'{seed_password}'. Log in with this and change it immediately on the Settings page.")
+
+        accounts.append((slot, username, pw_hash))
+    return accounts
 
 
 @app.before_request
@@ -111,9 +128,16 @@ def _require_login():
 def login():
     error = None
     if request.method == "POST":
+        username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
-        if check_password_hash(_admin_password_hash(), password):
+        matched_user = None
+        for slot, acct_username, pw_hash in _get_admin_accounts():
+            if username and acct_username == username and check_password_hash(pw_hash, password):
+                matched_user = acct_username
+                break
+        if matched_user:
             session["logged_in"] = True
+            session["admin_user"] = matched_user
             next_path = request.form.get("next") or request.args.get("next") or ""
             # Only follow it if it's a plain relative path on this same
             # site (starts with exactly one "/") — never an external URL,
@@ -122,7 +146,7 @@ def login():
             if not next_path.startswith("/") or next_path.startswith("//"):
                 next_path = url_for("admin")
             return redirect(next_path)
-        error = "Incorrect password."
+        error = "Incorrect username or password."
     school_name = get_setting("school_name") or "School"
     return render_template("login.html", error=error, school_name=school_name)
 
@@ -130,6 +154,7 @@ def login():
 @app.route("/logout")
 def logout():
     session.pop("logged_in", None)
+    session.pop("admin_user", None)
     return redirect(url_for("login"))
 
 # Always initialize the database when the app loads — regardless of how
@@ -137,6 +162,11 @@ def logout():
 # setup_database() uses CREATE TABLE IF NOT EXISTS so it's safe to call
 # every time — it won't touch existing data.
 setup_database()
+
+# Seed the two admin accounts' default username/password right away (rather
+# than waiting for the first login attempt) so the Settings page has
+# something sensible to show immediately after a fresh deploy.
+_get_admin_accounts()
 
 UPLOAD_FOLDER   = os.path.join("static", "uploads")
 ALLOWED_IMAGES  = {"png", "jpg", "jpeg", "gif", "webp"}
@@ -590,15 +620,23 @@ def settings():
 
 @app.route("/settings/save", methods=["POST"])
 def settings_save():
+    admin_form_fields = {f"admin{slot}_username" for slot in ADMIN_SLOTS} | \
+                         {f"admin{slot}_password" for slot in ADMIN_SLOTS}
     for key, value in request.form.items():
-        if key == "admin_password":
-            # Special-cased: never store the plaintext password, and
-            # leaving this field blank means "keep the current password"
-            # rather than wiping it out.
-            if value.strip():
-                save_setting("admin_password_hash", generate_password_hash(value.strip()))
-            continue
+        if key in admin_form_fields:
+            continue  # handled separately below
         save_setting(key, value.strip())
+
+    for slot in ADMIN_SLOTS:
+        new_username = request.form.get(f"admin{slot}_username", "").strip()
+        if new_username:
+            save_setting(f"admin{slot}_username", new_username)
+        new_password = request.form.get(f"admin{slot}_password", "")
+        # Blank password field means "keep the current password" rather
+        # than wiping it out. Never store the plaintext password itself.
+        if new_password.strip():
+            save_setting(f"admin{slot}_password_hash", generate_password_hash(new_password.strip()))
+
     return redirect(url_for("settings") + "?saved=1")
 
 
